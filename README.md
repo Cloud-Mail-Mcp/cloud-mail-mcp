@@ -69,12 +69,12 @@ Then open **http://localhost:8787**.
 
 Your MCP server URL is your MailMCP address plus `/mcp`, e.g. `https://mail.example.com/mcp`. Apps that support MCP sign-in (OAuth) only need that URL: they send you to a MailMCP page where you choose which mailboxes the app can use and what it may do in each. Claude and ChatGPT require an `https://` address.
 
-| App | How |
-| --- | --- |
-| **Claude** (web, Desktop, mobile) | Settings → Connectors → **Add custom connector** → paste the URL → **Connect** |
-| **ChatGPT** | Settings → Apps & Connectors → Advanced → turn on **Developer mode**, then create a connector with the URL and OAuth |
-| **Claude Code** | `claude mcp add --transport http mailmcp https://mail.example.com/mcp`, then `/mcp` → Authenticate |
-| **Cursor, VS Code, others** | Add a remote (HTTP) MCP server with the URL |
+| App                               | How                                                                                                                  |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Claude** (web, Desktop, mobile) | Settings → Connectors → **Add custom connector** → paste the URL → **Connect**                                       |
+| **ChatGPT**                       | Settings → Apps & Connectors → Advanced → turn on **Developer mode**, then create a connector with the URL and OAuth |
+| **Claude Code**                   | `claude mcp add --transport http mailmcp https://mail.example.com/mcp`, then `/mcp` → Authenticate                   |
+| **Cursor, VS Code, others**       | Add a remote (HTTP) MCP server with the URL                                                                          |
 
 Connected apps appear under **Agents**, where you can change their access, disable them or remove them. The admin panel's Agents page shows your exact URL and these steps.
 
