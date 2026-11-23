@@ -9,6 +9,9 @@
  * Node.js bundle and then publishes them all at once: image tags (:0.2.0, :0.2, :latest), the
  * `dist` branch (Enhance / git-deploy hosts) and the GitHub release (installer, compose, zip).
  *
+ * Before releasing, describe the changes under "## [Unreleased]" in CHANGELOG.md; that section
+ * becomes this version's entry and its GitHub release notes.
+ *
  * Safety checks: on `main`, nothing uncommitted, in sync with origin, version newer than the
  * last release, and CI green on GitHub for this exact commit (skip with --skip-ci-check).
  */
@@ -116,6 +119,28 @@ const edits = [
           /changeLog:\n/,
           `changeLog:\n  - date: ${today}\n    description: MailMCP ${tag}\n`,
         ),
+  },
+  {
+    // What's new: the Unreleased section becomes this version (and its GitHub release notes).
+    file: "CHANGELOG.md",
+    apply: (s) => {
+      const body = s
+        .split("## [Unreleased]")[1]
+        ?.split(/\n## \[/)[0]
+        ?.trim();
+      if (!body) fail("CHANGELOG.md has nothing under ## [Unreleased]. Describe what's new first.");
+      const repoUrl = s.match(
+        /\[Unreleased\]: (https:\/\/github\.com\/[^/]+\/[^/]+)\/compare\//,
+      )?.[1];
+      let out = s.replace("## [Unreleased]", `## [Unreleased]\n\n## [${version}] - ${today}`);
+      if (repoUrl) {
+        out = out.replace(
+          /\[Unreleased\]: .*\n/,
+          `[Unreleased]: ${repoUrl}/compare/${tag}...HEAD\n[${version}]: ${repoUrl}/releases/tag/${tag}\n`,
+        );
+      }
+      return out;
+    },
   },
 ];
 for (const e of edits) {
