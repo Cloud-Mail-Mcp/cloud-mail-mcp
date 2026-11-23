@@ -1,0 +1,36 @@
+# MailMCP for Coolify (New resource → Docker Compose).
+# Coolify fills SERVICE_* variables automatically: a domain for the app on port 8787 and a
+# generated database user/password. See docs/install/panels.md.
+services:
+  mailmcp:
+    image: ghcr.io/cloud-mail-mcp/mailmcp:latest
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_MAILMCP_8787
+      - DATABASE_URL=postgres://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/mailmcp
+      - TRUST_PROXY=true
+      - SECURE_COOKIES=true
+    volumes:
+      # Encryption key + stored mail. Keep this volume; back up /data/master.key.
+      - mailmcp-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=mailmcp
+    volumes:
+      - mailmcp-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d mailmcp"]
+      interval: 5s
+      retries: 20
+
+volumes:
+  mailmcp-data:
+  mailmcp-db:

@@ -18,3 +18,4 @@ export * from "./scopes";
 export * from "./services";
 export * from "./settings";
 export * from "./sync";
+export * from "./worker";

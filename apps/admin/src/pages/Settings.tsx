@@ -367,6 +367,8 @@ export function SettingsPage() {
 
 interface SystemInfo {
   version: string;
+  install: "source" | "docker" | "compose" | "bundle";
+  webhookConfigured: boolean;
   revision: string | null;
   repo: string | null;
   channel: "stable" | "edge";
@@ -535,28 +537,136 @@ export function UpdatesCard() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
-            <p>
-              {d.updater.available
-                ? "The updater container isn't running, so update from the server's command line:"
-                : "Update from the server's command line:"}
-            </p>
-            <pre className="overflow-x-auto rounded-md bg-zinc-900 p-3 text-xs text-zinc-100">
-              {d.repo
-                ? "cd ~/mailmcp   # your install folder\ndocker compose pull && docker compose up -d"
-                : "git pull && pnpm install && pnpm db:migrate\n# then restart the server and worker"}
-            </pre>
-            <Button
-              variant="secondary"
-              busy={check.isFetching}
-              onClick={() => (force ? check.refetch() : setForce(true))}
-            >
-              Check for updates
-            </Button>
-          </div>
+          <ManualUpdate
+            info={d}
+            checking={check.isFetching}
+            onCheck={() => (force ? check.refetch() : setForce(true))}
+            onWebhookUpdate={() => start.mutate()}
+            updating={start.isPending}
+          />
         )}
         {err && <Alert tone="error" title={err} />}
       </div>
     </Card>
+  );
+}
+
+/** Update instructions for installs without the updater container, per install type. */
+function ManualUpdate({
+  info,
+  checking,
+  onCheck,
+  onWebhookUpdate,
+  updating,
+}: {
+  info: SystemInfo;
+  checking: boolean;
+  onCheck: () => void;
+  onWebhookUpdate: () => void;
+  updating: boolean;
+}) {
+  const repo = info.repo || "Cloud-Mail-Mcp/mailmcp";
+  const hook = useSetting("updates");
+  const pre = "overflow-x-auto rounded-md bg-zinc-900 p-3 text-xs text-zinc-100";
+  return (
+    <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
+      {info.install === "bundle" && (
+        <>
+          <p>
+            This copy runs as the Node.js bundle. If your host deploys it from GitHub (for example
+            Enhance <em>GitHub deploy</em>), track the <code>dist</code> branch for stable releases
+            or <code>dist-edge</code> for every change, with auto-deploy on. New versions then
+            install themselves, and MailMCP restarts onto them within a minute.
+          </p>
+          <p>
+            Otherwise, download the newest <code>mailmcp-node</code> zip from{" "}
+            <a
+              className="text-blue-600 hover:underline"
+              href={`https://github.com/${repo}/releases/latest`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Releases
+            </a>{" "}
+            and replace the app folder, then restart the app. Your data in{" "}
+            <code>~/mailmcp-data</code> is kept.
+          </p>
+        </>
+      )}
+      {(info.install === "docker" || info.install === "compose") && (
+        <>
+          <p>
+            Your hosting panel manages this container. Redeploy it there to pull the newest image,
+            or paste the panel's <strong>redeploy webhook</strong> below so “Update now” can do it
+            for you.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Redeploy webhook URL"
+              htmlFor="hookurl"
+              hint="From your panel (Coolify, Dokploy, Easypanel, CapRover…). Stored encrypted."
+            >
+              <Input
+                id="hookurl"
+                type="url"
+                autoComplete="off"
+                placeholder={
+                  hook.q.data?.secretsSet.webhookUrl
+                    ? "Saved. Leave blank to keep."
+                    : "https://panel.example.com/api/…"
+                }
+                value={(getPath(hook.draft, "webhookUrl") as string) ?? ""}
+                onChange={(e) => hook.set("webhookUrl", e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Authorization header (optional)"
+              htmlFor="hookauth"
+              hint="Only if your panel needs one, e.g. Bearer <API token>."
+            >
+              <Input
+                id="hookauth"
+                type="password"
+                autoComplete="new-password"
+                placeholder={
+                  hook.q.data?.secretsSet.webhookAuth ? "Saved. Leave blank to keep." : ""
+                }
+                value={(getPath(hook.draft, "webhookAuth") as string) ?? ""}
+                onChange={(e) => hook.set("webhookAuth", e.target.value)}
+              />
+            </Field>
+          </div>
+          {hook.err && <Alert tone="error" title={hook.err.message} />}
+          {hook.saved && <Alert tone="success" title="Webhook saved." />}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              busy={hook.save.isPending}
+              onClick={() => hook.save.mutate()}
+            >
+              Save webhook
+            </Button>
+            {info.webhookConfigured && (
+              <Button busy={updating} onClick={onWebhookUpdate}>
+                Update now
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+      {info.install === "source" && (
+        <>
+          <p>This is a source checkout. Update it from the command line:</p>
+          <pre className={pre}>
+            {
+              "git pull && pnpm install\n# then restart the server and worker (migrations run on start)"
+            }
+          </pre>
+        </>
+      )}
+      <Button variant="secondary" busy={checking} onClick={onCheck}>
+        Check for updates
+      </Button>
+    </div>
   );
 }

@@ -49,7 +49,7 @@ export async function buildApp(opts: {
 }) {
   const app = Fastify({
     logger: opts.logger === false ? false : { level: process.env.LOG_LEVEL ?? "info" },
-    trustProxy: process.env.TRUST_PROXY === "true",
+    trustProxy: opts.config.trustProxy,
     bodyLimit: 30 * 1024 * 1024, // room for base64 attachments on send
   });
 

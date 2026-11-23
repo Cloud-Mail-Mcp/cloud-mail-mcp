@@ -29,6 +29,23 @@ export const settingDefs = {
     }),
     secretFields: [],
   },
+  /**
+   * For installs managed by a hosting panel (Coolify, Dokploy, Easypanel, CapRover…): "Update
+   * now" calls the panel's redeploy webhook, which pulls the latest image.
+   */
+  updates: {
+    schema: z.object({
+      webhookUrl: z
+        .string()
+        .trim()
+        .max(1000)
+        .refine((v) => v === "" || /^https?:\/\//.test(v), "Must start with https:// (or http://)")
+        .default(""),
+      /** Optional Authorization header value, e.g. "Bearer <token>" for Coolify's API. */
+      webhookAuth: z.string().max(2000).default(""),
+    }),
+    secretFields: ["webhookUrl", "webhookAuth"],
+  },
   /** First-run wizard state. The wizard shows until `completedAt` is set. */
   setup: {
     schema: z.object({ completedAt: z.string().nullable().default(null) }),

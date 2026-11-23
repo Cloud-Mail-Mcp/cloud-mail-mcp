@@ -26,12 +26,13 @@ const LoginBody = z.object({ email: z.string().trim().min(1), password: z.string
 
 export async function authRoutes(app: FastifyInstance, { db, config, settings }: AppDeps) {
   const limiter = new AttemptLimiter();
-  const cookieOpts = {
+  // Secure when configured, or whenever this request arrived over HTTPS (also via a trusted proxy).
+  const cookieOpts = (req: { protocol: string }) => ({
     path: "/",
     httpOnly: true,
     sameSite: "strict" as const,
-    secure: config.secureCookies,
-  };
+    secure: config.secureCookies || req.protocol === "https",
+  });
 
   const needsSetup = async () => {
     const [row] = await db.select({ n: count() }).from(users);
@@ -92,7 +93,7 @@ export async function authRoutes(app: FastifyInstance, { db, config, settings }:
       ip: req.ip,
     });
     const s = await createSession(db, created.user.id, req);
-    reply.setCookie(SESSION_COOKIE, s.token, { ...cookieOpts, expires: s.expiresAt });
+    reply.setCookie(SESSION_COOKIE, s.token, { ...cookieOpts(req), expires: s.expiresAt });
     return { ok: true };
   });
 
@@ -113,7 +114,7 @@ export async function authRoutes(app: FastifyInstance, { db, config, settings }:
     }
     limiter.reset(key);
     const s = await createSession(db, user.id, req);
-    reply.setCookie(SESSION_COOKIE, s.token, { ...cookieOpts, expires: s.expiresAt });
+    reply.setCookie(SESSION_COOKIE, s.token, { ...cookieOpts(req), expires: s.expiresAt });
     const me = await userFromSession(db, s.token);
     if (me) {
       await audit(db, {

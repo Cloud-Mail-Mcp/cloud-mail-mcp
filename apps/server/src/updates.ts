@@ -19,7 +19,7 @@ const pkgVersion = (() => {
   try {
     return (
       (
-        JSON.parse(readFileSync(join(runtime.repoRoot, "package.json"), "utf8")) as {
+        JSON.parse(readFileSync(join(runtime.home, "package.json"), "utf8")) as {
           version?: string;
         }
       ).version ?? "0.0.0"

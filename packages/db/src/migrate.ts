@@ -1,10 +1,8 @@
 import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { createDb } from "./index";
+import { runMigrations } from "./index";
 
-const { db, close } = createDb(
+await runMigrations(
   process.env.DATABASE_URL ?? "postgres://mailmcp:mailmcp@localhost:5433/mailmcp",
+  process.env.MAILMCP_MIGRATIONS_DIR ?? fileURLToPath(new URL("../drizzle", import.meta.url)),
 );
-await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
-await close();
 console.log("migrations applied");

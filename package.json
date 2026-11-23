@@ -19,11 +19,13 @@
     "db:down": "docker compose -f deploy/docker-compose.yml down",
     "db:generate": "pnpm --filter @mailmcp/db generate",
     "db:migrate": "pnpm --filter @mailmcp/db migrate",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "bundle": "pnpm --filter @mailmcp/admin build && node scripts/build-bundle.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",
     "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "turbo": "^2.11.11",
     "typescript": "^7.0.2"

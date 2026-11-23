@@ -26,7 +26,7 @@ FROM base AS runtime
 ARG MAILMCP_VERSION=""
 ARG MAILMCP_REVISION=""
 ARG MAILMCP_REPO=""
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 MAILMCP_DATA_DIR=/data \
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 MAILMCP_DATA_DIR=/data MAILMCP_INSTALL=docker \
     MAILMCP_VERSION=$MAILMCP_VERSION MAILMCP_REVISION=$MAILMCP_REVISION MAILMCP_REPO=$MAILMCP_REPO
 LABEL org.opencontainers.image.title="MailMCP" \
       org.opencontainers.image.description="Self-hosted email server for AI agents (MCP)" \

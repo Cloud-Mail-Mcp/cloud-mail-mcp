@@ -1,27 +1,19 @@
 #!/bin/sh
-# Runs database migrations, then starts the requested role(s).
+# Starts MailMCP in the container. The server applies database migrations itself on start,
+# and shows a web installer if no database is configured yet.
+#   all     (default) one process: web server + background sync worker
+#   server  web server only (run a separate `worker` container to scale sync)
+#   worker  background sync worker only
 set -e
 cd /app
 role="${1:-all}"
-run() { exec node --import tsx "$@"; }
-
-echo "[mailmcp] applying database migrations…"
-(cd packages/db && node --import tsx src/migrate.ts)
 
 case "$role" in
-  server) cd apps/server && run src/index.ts ;;
-  worker) cd apps/worker && run src/index.ts ;;
   all)
-    (cd apps/worker && node --import tsx src/index.ts) &
-    worker=$!
-    trap 'kill -TERM $worker 2>/dev/null; kill -TERM $server 2>/dev/null' TERM INT
-    (cd apps/server && node --import tsx src/index.ts) &
-    server=$!
-    # If either process dies, stop the container so it gets restarted.
-    while kill -0 $worker 2>/dev/null && kill -0 $server 2>/dev/null; do sleep 2; done
-    kill -TERM $worker $server 2>/dev/null || true
-    wait
-    exit 1
+    cd apps/server
+    MAILMCP_EMBEDDED_WORKER=true exec node --import tsx src/index.ts
     ;;
-  *) echo "usage: entrypoint.sh [server|worker|all]"; exit 64 ;;
+  server) cd apps/server && exec node --import tsx src/index.ts ;;
+  worker) cd apps/worker && exec node --import tsx src/index.ts ;;
+  *) echo "usage: entrypoint.sh [all|server|worker]"; exit 64 ;;
 esac

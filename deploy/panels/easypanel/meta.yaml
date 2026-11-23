@@ -1,0 +1,53 @@
+# Template for https://github.com/easypanel-io/templates (copy this folder to templates/mailmcp/).
+# Easypanel asks for pinned image versions: bump appServiceImage on each release.
+name: MailMCP
+description:
+  Self-hosted email server for AI agents. Connect your mailboxes, index them locally, and give
+  Claude or your own AI permissioned access over MCP, with send approvals and an audit log.
+instructions:
+  Open the app's domain and follow the setup wizard to create your admin login and connect a
+  mailbox. Back up /data/master.key (it encrypts saved mail passwords and stored mail).
+changeLog:
+  - date: 2026-11-23
+    description: first release
+links:
+  - label: GitHub
+    url: https://github.com/Cloud-Mail-Mcp/mailmcp
+  - label: Documentation
+    url: https://github.com/Cloud-Mail-Mcp/mailmcp/tree/main/docs/install
+contributors:
+  - name: MailMCP contributors
+    url: https://github.com/Cloud-Mail-Mcp
+schema:
+  type: object
+  required:
+    - appServiceName
+    - appServiceImage
+    - databaseServiceName
+  properties:
+    appServiceName:
+      type: string
+      title: App Service Name
+      default: mailmcp
+    appServiceImage:
+      type: string
+      title: App Service Image
+      default: ghcr.io/cloud-mail-mcp/mailmcp:0.1.0
+    databaseServiceName:
+      type: string
+      title: Database Service Name
+      default: mailmcp-db
+benefits:
+  - title: Your mail, your server
+    description: Mail is indexed and stored encrypted on your own infrastructure.
+  - title: Safe AI access
+    description: Per-agent, per-mailbox permissions, human approval for sends, and a full audit log.
+features:
+  - title: Many mailboxes
+    description: IMAP/SMTP accounts (cPanel, iCloud, Gmail app passwords) with fast local search.
+  - title: MCP endpoint
+    description: Works with Claude Desktop, Claude Code and any MCP client.
+tags:
+  - Email
+  - AI
+  - MCP

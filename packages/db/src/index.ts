@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import * as schema from "./schema";
 
@@ -6,6 +7,16 @@ export * from "./schema";
 export { schema };
 
 export type Db = ReturnType<typeof createDb>["db"];
+
+/** Apply pending migrations (idempotent; safe to run on every start). */
+export async function runMigrations(url: string, migrationsFolder: string) {
+  const { db, close } = createDb(url);
+  try {
+    await migrate(db, { migrationsFolder });
+  } finally {
+    await close();
+  }
+}
 
 export function createDb(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("DATABASE_URL is not set");

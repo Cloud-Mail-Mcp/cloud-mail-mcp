@@ -5,13 +5,14 @@ import imapModule from "@mailmcp/module-imap";
 import type { ModuleManifest } from "@mailmcp/module-sdk";
 
 const { key } = await loadOrCreateMasterKey(runtime.dataDir);
-const { db, close } = createDb(runtime.databaseUrl);
+const databaseUrl = runtime.databaseUrl as string;
+const { db, close } = createDb(databaseUrl);
 const svc = createServices({
   db,
   masterKey: key,
   modules: [imapModule as unknown as ModuleManifest],
   dataDir: runtime.dataDir,
-  databaseUrl: runtime.databaseUrl,
+  databaseUrl,
 });
 const ids = process.argv[2]
   ? [process.argv[2]]

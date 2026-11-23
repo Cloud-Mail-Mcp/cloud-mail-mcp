@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/drizzle/meta"]
+    "includes": ["**", "!**/drizzle/meta", "!**/deploy/panels/easypanel"]
   },
   "formatter": {
     "indentStyle": "space",

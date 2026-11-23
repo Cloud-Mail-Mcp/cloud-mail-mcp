@@ -31,6 +31,12 @@ Installer options: `--domain NAME`, `--dir PATH`, `--port N`, `--edge` (follow e
 > **Back up your encryption key.** It encrypts every saved mail password and all stored mail, and it is deliberately not in the database:
 > `cd mailmcp && docker compose cp mailmcp:/data/master.key ./master.key.backup`
 
+**Other ways to install:**
+
+- **[Enhance](docs/install/enhance.md):** GitHub deploy plus Node.js; no build step, and updates arrive automatically.
+- **[cPanel, Plesk or any Node.js host](docs/install/shared-hosting.md):** the prebuilt `mailmcp-node` zip.
+- **[Easypanel, Coolify, Dokploy, CapRover, Portainer](docs/install/panels.md):** the Docker image.
+
 ### Updates
 
 **Settings → Updates** shows the running version and whether a newer one exists. **Update now** pulls the new image and restarts MailMCP. Your data, settings and key are kept, and database changes apply automatically. You can also choose:

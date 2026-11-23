@@ -21,6 +21,7 @@ services:
     environment:
       DATABASE_URL: postgres://mailmcp:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/mailmcp
       MAILMCP_TAG: ${MAILMCP_TAG:-latest}
+      MAILMCP_INSTALL: compose
       MAILMCP_CONTROL_DIR: /control
       SECURE_COOKIES: ${SECURE_COOKIES:-true}
       TRUST_PROXY: ${TRUST_PROXY:-false}

@@ -2,8 +2,13 @@
 # workflow — the original project or anyone's fork — so every copy can ship its own builds.
 #
 #   push to main      → ghcr.io/<owner>/<repo>:edge        ("Every change" update channel)
+#                       + Node.js bundle pushed to the `dist-edge` branch
 #   push tag v1.2.3   → :1.2.3, :1.2, :latest               ("Stable releases" channel)
-#                       + a GitHub release with install.sh and compose.yml attached
+#                       + Node.js bundle pushed to the `dist` branch
+#                       + a GitHub release with install.sh, compose.yml and mailmcp-node-1.2.3.zip
+#
+# The `dist` / `dist-edge` branches hold a ready-to-run bundle (no build step), for hosting panels
+# that deploy straight from a git branch, such as Enhance "GitHub deploy".
 #
 # After the first publish, make the package public once:
 #   GitHub → your profile/org → Packages → mailmcp → Package settings → Change visibility → Public
@@ -65,9 +70,58 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Version
+        id: v
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "branch=dist" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=edge-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "branch=dist-edge" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build the Node.js bundle
+        run: pnpm --filter @mailmcp/admin build && node scripts/build-bundle.mjs
+        env:
+          MAILMCP_VERSION: ${{ steps.v.outputs.version }}
+          MAILMCP_REVISION: ${{ github.sha }}
+          MAILMCP_REPO: ${{ github.repository }}
+      - name: Smoke test (starts and serves the database installer)
+        run: |
+          cd dist/bundle
+          HOME="$RUNNER_TEMP/home" PORT=8790 node server.mjs > "$RUNNER_TEMP/bundle.log" 2>&1 &
+          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8790/ | grep -q "Connect a database" && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/bundle.log"; exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-bundle
+          path: dist/mailmcp-node-*.zip
+      - name: Publish to the ${{ steps.v.outputs.branch }} branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.v.outputs.branch }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          cd dist/bundle
+          git init -q -b "$BRANCH"
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "MailMCP $VERSION (built from $GITHUB_SHA)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: image
+    needs: [image, bundle]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,9 +131,13 @@ jobs:
           sed "s|__REPO__|${GITHUB_REPOSITORY}|" deploy/install.sh > dist/install.sh
           cp deploy/compose.yml dist/compose.yml
           grep -q "$GITHUB_REPOSITORY" dist/install.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-bundle
+          path: dist
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/install.sh dist/compose.yml \
+          gh release create "$GITHUB_REF_NAME" dist/install.sh dist/compose.yml dist/mailmcp-node-*.zip \
             --title "MailMCP $GITHUB_REF_NAME" --generate-notes --verify-tag
