@@ -1,0 +1,115 @@
+# MailMCP — production stack.
+#
+# Installed by install.sh, which writes the matching .env next to this file. By hand:
+#   1. put this file and an .env (see deploy/.env.production.example) in a folder
+#   2. docker compose up -d
+#
+# Services:
+#   mailmcp   the app (admin panel + MCP endpoint + sync worker) — runs migrations on start
+#   postgres  database
+#   updater   applies updates when you click "Update now" in Settings (or daily with AUTO_UPDATE)
+#   caddy     automatic HTTPS for DOMAIN (enable with COMPOSE_PROFILES=https)
+name: mailmcp
+
+services:
+  mailmcp:
+    image: ${MAILMCP_IMAGE:?set MAILMCP_IMAGE in .env}:${MAILMCP_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mailmcp:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/mailmcp
+      MAILMCP_TAG: ${MAILMCP_TAG:-latest}
+      MAILMCP_CONTROL_DIR: /control
+      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    ports:
+      - "${MAILMCP_BIND:-127.0.0.1:8787}:8787"
+    volumes:
+      # /data/master.key encrypts saved passwords and stored mail. BACK IT UP:
+      #   docker compose cp mailmcp:/data/master.key ./master.key.backup
+      - app-data:/data
+      - control:/control
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mailmcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: mailmcp
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailmcp"]
+      interval: 5s
+      retries: 20
+
+  # Pulls new images and recreates the mailmcp container when asked to.
+  # It talks to Docker, so it never listens on the network; requests arrive as a file in
+  # the shared `control` volume, written by the admin panel's "Update now" button.
+  updater:
+    image: docker:27-cli
+    restart: unless-stopped
+    environment:
+      AUTO_UPDATE: ${AUTO_UPDATE:-false}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - control:/control
+      - .:/project
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        C=/control
+        P=/project
+        mkdir -p $$C && chown 1000:1000 $$C
+        [ -f $$C/update-status.json ] || echo '{"state":"idle"}' > $$C/update-status.json
+        last_auto=$$(date +%s)
+        while true; do
+          touch $$C/updater-heartbeat
+          now=$$(date +%s)
+          auto=0
+          if [ "$${AUTO_UPDATE}" = "true" ] && [ $$((now - last_auto)) -ge 86400 ]; then auto=1; last_auto=$$now; fi
+          if [ -f $$C/update-request.json ] || [ $$auto = 1 ]; then
+            id=$$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' $$C/update-request.json 2>/dev/null)
+            tag=$$(sed -n 's/.*"tag":"\([^"]*\)".*/\1/p' $$C/update-request.json 2>/dev/null)
+            rm -f $$C/update-request.json
+            say() { printf '{"id":"%s","state":"%s","message":"%s","at":"%s"}' "$$id" "$$1" "$$2" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > $$C/update-status.json; echo "[updater] $$1 $$2"; }
+            if [ -n "$$tag" ]; then
+              if grep -q '^MAILMCP_TAG=' $$P/.env; then sed -i "s/^MAILMCP_TAG=.*/MAILMCP_TAG=$$tag/" $$P/.env; else echo "MAILMCP_TAG=$$tag" >> $$P/.env; fi
+            fi
+            say pulling "Downloading the new version"
+            if docker compose -f $$P/compose.yml --project-directory $$P pull mailmcp > /tmp/u.log 2>&1; then
+              say restarting "Restarting MailMCP"
+              if docker compose -f $$P/compose.yml --project-directory $$P up -d --no-deps mailmcp >> /tmp/u.log 2>&1; then
+                say done "Update applied"
+              else
+                say failed "$$(tail -n 3 /tmp/u.log | tr '\n"\\' '   ')"
+              fi
+            else
+              say failed "$$(tail -n 3 /tmp/u.log | tr '\n"\\' '   ')"
+            fi
+          fi
+          sleep 10
+        done
+
+  # Automatic HTTPS (Let's Encrypt). Enable with COMPOSE_PROFILES=https and DOMAIN=mail.example.com,
+  # and point the domain's DNS at this server (ports 80 and 443 must be reachable).
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN:-localhost} --to mailmcp:8787
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  # Prefixed with the project name: mailmcp_app-data, mailmcp_db-data, …
+  app-data:
+  db-data:
+  control:
+  caddy-data:

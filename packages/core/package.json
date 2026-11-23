@@ -1,0 +1,26 @@
+{
+  "name": "@mailmcp/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.9.0",
+    "@types/node": "^22.20.5"
+  },
+  "dependencies": {
+    "@mailmcp/db": "workspace:*",
+    "@mailmcp/module-sdk": "workspace:*",
+    "@mailmcp/search": "workspace:*",
+    "@mailmcp/storage": "workspace:*",
+    "mailparser": "^3.14.5",
+    "pg-boss": "^12.38.2",
+    "zod": "^4.6.7"
+  }
+}

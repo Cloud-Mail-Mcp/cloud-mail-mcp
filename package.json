@@ -1,0 +1,31 @@
+{
+  "name": "mailmcp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Self-hosted email server for AI agents: many mailboxes, local index, MCP access with per-account permissions.",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "db:up": "docker compose -f deploy/docker-compose.yml up -d postgres",
+    "db:down": "docker compose -f deploy/docker-compose.yml down",
+    "db:generate": "pnpm --filter @mailmcp/db generate",
+    "db:migrate": "pnpm --filter @mailmcp/db migrate",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.11",
+    "typescript": "^7.0.2"
+  }
+}

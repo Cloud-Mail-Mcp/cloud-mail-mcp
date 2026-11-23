@@ -1,0 +1,634 @@
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Button, Spinner } from "../components/ui";
+import {
+  type AccountSummary,
+  addr,
+  api,
+  type MailFolder,
+  type MessageDetail,
+  type MessagePage,
+  type MessageSummary,
+  shortDate,
+} from "../lib/api";
+
+const ROLE_LABEL: Record<string, string> = {
+  inbox: "Inbox",
+  sent: "Sent",
+  drafts: "Drafts",
+  archive: "Archive",
+  trash: "Trash",
+  spam: "Spam",
+  all: "All Mail",
+  starred: "Starred",
+  important: "Important",
+};
+const ROLE_ORDER = [
+  "inbox",
+  "starred",
+  "important",
+  "drafts",
+  "sent",
+  "archive",
+  "all",
+  "spam",
+  "trash",
+];
+
+interface View {
+  accountId?: string;
+  folder: string; // role, path or id
+  label: string;
+}
+
+// ───────────────────────────── HTML body (sandboxed) ─────────────────────────────
+
+/**
+ * Renders untrusted email HTML in a sandboxed iframe: no scripts, no forms, no same-origin
+ * access, and a CSP that blocks remote content (tracking pixels) until the user allows it.
+ */
+function HtmlBody({ html }: { html: string }) {
+  const [showImages, setShowImages] = useState(false);
+  const ref = useRef<HTMLIFrameElement>(null);
+  const hasRemote = /<img[^>]+src=["']?https?:/i.test(html);
+  const csp = showImages
+    ? "default-src 'none'; img-src https: http: data: cid:; style-src 'unsafe-inline'; font-src https: data:"
+    : "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'";
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font:14px/1.5 system-ui,sans-serif;color:#18181b;margin:0;padding:4px;word-wrap:break-word}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
+
+  const resize = () => {
+    const f = ref.current;
+    if (f?.contentDocument?.body)
+      f.style.height = `${f.contentDocument.documentElement.scrollHeight + 8}px`;
+  };
+
+  return (
+    <div>
+      {hasRemote && !showImages && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+          Remote images are blocked to prevent tracking.
+          <button
+            type="button"
+            onClick={() => setShowImages(true)}
+            className="font-medium text-blue-600 hover:underline"
+          >
+            Show images
+          </button>
+        </div>
+      )}
+      <iframe
+        ref={ref}
+        title="Message content"
+        // allow-same-origin only so we can measure height; scripts stay disabled.
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        srcDoc={doc}
+        onLoad={resize}
+        className="w-full rounded-md border border-zinc-200 bg-white dark:border-zinc-700"
+        style={{ minHeight: 120 }}
+      />
+    </div>
+  );
+}
+
+// ───────────────────────────── Message view ─────────────────────────────
+
+function MessageCard({
+  m,
+  expanded,
+  onToggle,
+}: {
+  m: MessageDetail;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [plain, setPlain] = useState(!m.html);
+  return (
+    <article className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+        aria-expanded={expanded}
+      >
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            {addr(m.from)}{" "}
+            <span className="font-normal text-zinc-500">&lt;{m.from?.email}&gt;</span>
+          </p>
+          {expanded ? (
+            <p className="truncate text-xs text-zinc-500">
+              to {m.to.map(addr).join(", ")}
+              {m.cc.length > 0 && <> · cc {m.cc.map(addr).join(", ")}</>}
+            </p>
+          ) : (
+            <p className="truncate text-xs text-zinc-500">{m.snippet}</p>
+          )}
+        </div>
+        <time className="shrink-0 text-xs text-zinc-500" dateTime={m.date}>
+          {new Date(m.date).toLocaleString()}
+        </time>
+      </button>
+      {expanded && (
+        <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          {m.html && (
+            <div className="mb-2 text-right">
+              <button
+                type="button"
+                onClick={() => setPlain((p) => !p)}
+                className="text-xs text-zinc-500 hover:underline"
+              >
+                {plain ? "Show formatted" : "Show plain text"}
+              </button>
+            </div>
+          )}
+          {m.html && !plain ? (
+            <HtmlBody html={m.html} />
+          ) : (
+            <pre className="whitespace-pre-wrap break-words font-sans text-sm text-zinc-800 dark:text-zinc-200">
+              {m.text || "(no text)"}
+            </pre>
+          )}
+          {m.attachments.filter((a) => !a.inline).length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {m.attachments
+                .filter((a) => !a.inline)
+                .map((a) => (
+                  <li key={a.id}>
+                    <a
+                      href={`/api/v1/mail/messages/${m.id}/attachments/${a.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      📎 {a.filename ?? "attachment"}
+                      {a.size ? (
+                        <span className="text-zinc-400">{Math.ceil(a.size / 1024)} KB</span>
+                      ) : null}
+                    </a>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function Reader({
+  id,
+  onClose,
+  onChanged,
+}: {
+  id: number;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const qc = useQueryClient();
+  const thread = useQuery({
+    queryKey: ["thread", id],
+    queryFn: () => api<{ messages: MessageDetail[] }>(`/mail/messages/${id}/thread`),
+  });
+  const [open, setOpen] = useState<Set<number>>(new Set([id]));
+  const [replying, setReplying] = useState(false);
+  const [reply, setReply] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const msgs = thread.data?.messages ?? [];
+  const current = msgs.find((m) => m.id === id) ?? msgs.at(-1);
+
+  useEffect(() => {
+    setOpen(new Set([id]));
+    setReplying(false);
+    setReply("");
+    setNote(null);
+    setErr(null);
+  }, [id]);
+
+  const act = useMutation({
+    mutationFn: async (a: {
+      kind: "read" | "unread" | "flag" | "unflag" | "archive" | "trash";
+    }) => {
+      if (a.kind === "archive")
+        return api("/mail/messages/move", {
+          method: "POST",
+          body: { ids: [id], folder: "archive" },
+        });
+      if (a.kind === "trash")
+        return api("/mail/messages/delete", { method: "POST", body: { ids: [id] } });
+      const body =
+        a.kind === "read" || a.kind === "unread"
+          ? { read: a.kind === "read" }
+          : { flagged: a.kind === "flag" };
+      return api("/mail/messages/mark", { method: "POST", body: { ids: [id], ...body } });
+    },
+    onMutate: () => setErr(null),
+    onSuccess: async (_d, a) => {
+      onChanged();
+      if (a.kind === "archive" || a.kind === "trash") onClose();
+      else await qc.invalidateQueries({ queryKey: ["thread", id] });
+    },
+    onError: (e) => setErr((e as Error).message),
+  });
+  const send = useMutation({
+    mutationFn: () => api(`/mail/messages/${id}/reply`, { method: "POST", body: { text: reply } }),
+    onSuccess: () => {
+      setReplying(false);
+      setReply("");
+      setNote("Reply sent.");
+      onChanged();
+    },
+    onError: (e) => setErr((e as Error).message),
+  });
+
+  if (thread.isLoading) return <Spinner />;
+  if (thread.error)
+    return (
+      <Alert tone="error" title="Couldn't open this message">
+        {(thread.error as Error).message}
+      </Alert>
+    );
+  if (!current) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="mb-1 text-xs text-zinc-500 hover:underline lg:hidden"
+          >
+            ← Back to list
+          </button>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            {current.subject || "(no subject)"}
+          </h2>
+          <p className="text-xs text-zinc-500">
+            {current.account} · {current.folders.join(", ")}
+            {msgs.length > 1 && <> · {msgs.length} messages</>}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            variant="secondary"
+            onClick={() => act.mutate({ kind: current.unread ? "read" : "unread" })}
+          >
+            Mark {current.unread ? "read" : "unread"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => act.mutate({ kind: current.flagged ? "unflag" : "flag" })}
+          >
+            {current.flagged ? "Unflag" : "Flag"}
+          </Button>
+          <Button variant="secondary" onClick={() => act.mutate({ kind: "archive" })}>
+            Archive
+          </Button>
+          <Button variant="secondary" onClick={() => act.mutate({ kind: "trash" })}>
+            Delete
+          </Button>
+        </div>
+      </div>
+      {err && <Alert tone="error" title={err} />}
+      {note && <Alert tone="success" title={note} />}
+      {msgs.map((m) => (
+        <MessageCard
+          key={m.id}
+          m={m}
+          expanded={open.has(m.id) || msgs.length === 1}
+          onToggle={() =>
+            setOpen((s) => {
+              const n = new Set(s);
+              n.has(m.id) ? n.delete(m.id) : n.add(m.id);
+              return n;
+            })
+          }
+        />
+      ))}
+      {replying ? (
+        <form
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            send.mutate();
+          }}
+          className="space-y-2"
+        >
+          <label htmlFor="reply" className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            Reply to {addr(current.replyTo[0] ?? current.from)}
+          </label>
+          <textarea
+            id="reply"
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            rows={6}
+            className="w-full rounded-md border border-zinc-300 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          />
+          <div className="flex gap-2">
+            <Button type="submit" busy={send.isPending} disabled={!reply.trim()}>
+              Send reply
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setReplying(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button variant="secondary" onClick={() => setReplying(true)}>
+          Reply
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ───────────────────────────── Page ─────────────────────────────
+
+export function MailPage() {
+  const qc = useQueryClient();
+  const accountsQ = useQuery({
+    queryKey: ["accounts"],
+    queryFn: () => api<{ accounts: AccountSummary[] }>("/accounts"),
+  });
+  const foldersQ = useQuery({
+    queryKey: ["mail-folders"],
+    queryFn: () => api<{ folders: MailFolder[] }>("/mail/folders"),
+  });
+  const [view, setView] = useState<View>({ folder: "inbox", label: "All inboxes" });
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<number | null>(null);
+  const [sort, setSort] = useState<string>(() => {
+    try {
+      return localStorage.getItem("mailmcp.sort") ?? "date:desc";
+    } catch {
+      return "date:desc";
+    }
+  });
+  const changeSort = (v: string) => {
+    setSort(v);
+    setSelected(null);
+    try {
+      localStorage.setItem("mailmcp.sort", v);
+    } catch {
+      // storage unavailable (private mode): keep it for this session only
+    }
+  };
+  const [sortField, sortOrder] = sort.split(":") as [string, string];
+
+  const listKey = ["mail-list", view.accountId ?? "all", view.folder, query, sort];
+  const list = useInfiniteQuery({
+    queryKey: listKey,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
+      const p = new URLSearchParams();
+      if (view.accountId) p.set("accountId", view.accountId);
+      if (pageParam) p.set("cursor", pageParam);
+      p.set("limit", "50");
+      p.set("sort", sortField);
+      p.set("order", sortOrder);
+      if (query) {
+        p.set("q", query);
+        return api<MessagePage>(`/mail/search?${p}`);
+      }
+      p.set("folder", view.folder);
+      return api<MessagePage>(`/mail/messages?${p}`);
+    },
+    getNextPageParam: (last) => last.nextCursor,
+  });
+  const rows: MessageSummary[] = useMemo(
+    () => list.data?.pages.flatMap((p) => p.messages) ?? [],
+    [list.data],
+  );
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["mail-list"] });
+    qc.invalidateQueries({ queryKey: ["mail-folders"] });
+  };
+
+  const byAccount = useMemo(() => {
+    const m = new Map<string, MailFolder[]>();
+    for (const f of foldersQ.data?.folders ?? [])
+      m.set(f.accountId, [...(m.get(f.accountId) ?? []), f]);
+    for (const list of m.values()) {
+      list.sort((a, b) => {
+        const ra = a.role ? ROLE_ORDER.indexOf(a.role) : 99;
+        const rb = b.role ? ROLE_ORDER.indexOf(b.role) : 99;
+        return ra - rb || a.path.localeCompare(b.path);
+      });
+    }
+    return m;
+  }, [foldersQ.data]);
+  const totalUnread = (foldersQ.data?.folders ?? [])
+    .filter((f) => f.role === "inbox")
+    .reduce((n, f) => n + f.unreadCount, 0);
+
+  const pick = (v: View) => {
+    setView(v);
+    setQuery("");
+    setSearch("");
+    setSelected(null);
+  };
+
+  const navItem = (active: boolean) =>
+    `flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-sm ${
+      active
+        ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+        : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+    }`;
+
+  if (accountsQ.data && accountsQ.data.accounts.length === 0) {
+    return (
+      <Alert tone="info" title="No accounts yet">
+        Add an account under Accounts to start browsing mail.
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-[600px]">
+      {/* Folders */}
+      <nav
+        aria-label="Mailboxes"
+        className="hidden w-60 shrink-0 overflow-y-auto border-r border-zinc-200 bg-white p-3 md:block dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <button
+          type="button"
+          className={navItem(!view.accountId && view.folder === "inbox" && !query)}
+          onClick={() => pick({ folder: "inbox", label: "All inboxes" })}
+        >
+          All inboxes
+          {totalUnread > 0 && (
+            <span className="text-xs tabular-nums">{totalUnread.toLocaleString()}</span>
+          )}
+        </button>
+        {(accountsQ.data?.accounts ?? []).map((a) => (
+          <div key={a.id} className="mt-4">
+            <p
+              className="truncate px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400"
+              title={a.address}
+            >
+              {a.displayName ?? a.address}
+            </p>
+            {(byAccount.get(a.id) ?? []).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={navItem(
+                  view.accountId === a.id && view.folder === String(f.id) && !query,
+                )}
+                onClick={() =>
+                  pick({
+                    accountId: a.id,
+                    folder: String(f.id),
+                    label: `${a.displayName ?? a.address} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
+                  })
+                }
+              >
+                <span className="truncate">{f.role ? ROLE_LABEL[f.role] : f.path}</span>
+                {f.unreadCount > 0 && f.role !== "trash" && f.role !== "spam" && (
+                  <span className="text-xs tabular-nums">{f.unreadCount.toLocaleString()}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      {/* List */}
+      <section
+        className={`flex w-full flex-col border-r border-zinc-200 lg:w-96 lg:shrink-0 dark:border-zinc-800 ${selected ? "hidden lg:flex" : "flex"}`}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setQuery(search.trim());
+            setSelected(null);
+          }}
+          className="border-b border-zinc-200 p-3 dark:border-zinc-800"
+        >
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search: invoice from:dana has:attachment"
+            aria-label="Search mail"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-xs text-zinc-500">
+              {query
+                ? `Results for “${query}”${view.accountId ? ` in ${view.label.split(" · ")[0]}` : ""}`
+                : view.label}
+            </p>
+            <label className="flex shrink-0 items-center gap-1 text-xs text-zinc-500">
+              <span className="sr-only sm:not-sr-only">Sort</span>
+              <select
+                value={sort}
+                onChange={(e) => changeSort(e.target.value)}
+                className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                <option value="date:desc">Newest first</option>
+                <option value="date:asc">Oldest first</option>
+                <option value="from:asc">Sender A→Z</option>
+                <option value="from:desc">Sender Z→A</option>
+                <option value="subject:asc">Subject A→Z</option>
+                <option value="subject:desc">Subject Z→A</option>
+              </select>
+            </label>
+          </div>
+        </form>
+        <div className="flex-1 overflow-y-auto">
+          {list.isLoading ? (
+            <Spinner />
+          ) : list.error ? (
+            <div className="p-3">
+              <Alert tone="error" title="Couldn't load messages">
+                {(list.error as Error).message}
+              </Alert>
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="p-6 text-center text-sm text-zinc-500">
+              {query ? "No matches." : "No messages here yet. New accounts fill in as they sync."}
+            </p>
+          ) : (
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {rows.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(m.id)}
+                    aria-pressed={selected === m.id}
+                    className={`block w-full px-4 py-3 text-left ${selected === m.id ? "bg-blue-50 dark:bg-blue-950/40" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"}`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span
+                        className={`truncate text-sm ${m.unread ? "font-semibold text-zinc-900 dark:text-zinc-50" : "text-zinc-700 dark:text-zinc-300"}`}
+                      >
+                        {m.unread && (
+                          <>
+                            <span
+                              className="mr-1.5 inline-block size-2 rounded-full bg-blue-600"
+                              aria-hidden="true"
+                            />
+                            <span className="sr-only">Unread: </span>
+                          </>
+                        )}
+                        {(sortField === "from" ? m.from?.email : addr(m.from)) ||
+                          "(unknown sender)"}
+                      </span>
+                      <time className="shrink-0 text-xs text-zinc-500" dateTime={m.date}>
+                        {shortDate(m.date)}
+                      </time>
+                    </div>
+                    <p
+                      className={`truncate text-sm ${m.unread ? "font-medium text-zinc-900 dark:text-zinc-100" : "text-zinc-600 dark:text-zinc-400"}`}
+                    >
+                      {m.flagged && (
+                        <>
+                          <span aria-hidden="true">⚑ </span>
+                          <span className="sr-only">Flagged: </span>
+                        </>
+                      )}
+                      {m.subject || "(no subject)"}
+                      {m.hasAttachments && (
+                        <>
+                          <span aria-hidden="true"> 📎</span>
+                          <span className="sr-only"> (has attachments)</span>
+                        </>
+                      )}
+                    </p>
+                    <p className="truncate text-xs text-zinc-500">{m.snippet ?? ""}</p>
+                    {!view.accountId && (accountsQ.data?.accounts.length ?? 0) > 1 && (
+                      <p className="mt-0.5 truncate text-[11px] text-zinc-400">{m.account}</p>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {list.hasNextPage && (
+            <div className="p-3 text-center">
+              <Button
+                variant="ghost"
+                busy={list.isFetchingNextPage}
+                onClick={() => list.fetchNextPage()}
+              >
+                Load more
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Reader */}
+      <section
+        className={`min-w-0 flex-1 overflow-y-auto bg-zinc-50 p-4 sm:p-6 dark:bg-zinc-950 ${selected ? "block" : "hidden lg:block"}`}
+      >
+        {selected ? (
+          <Reader id={selected} onClose={() => setSelected(null)} onChanged={refresh} />
+        ) : (
+          <p className="mt-20 text-center text-sm text-zinc-500">Select a message to read it.</p>
+        )}
+      </section>
+    </div>
+  );
+}
