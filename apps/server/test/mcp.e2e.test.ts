@@ -308,7 +308,21 @@ test("mcp: organize + delete are write-through to the mail server", { skip }, as
   const { data } = await call(client, "list_messages", { limit: 10 });
   const [a, b, c] = data.messages.map((m: { id: number }) => m.id);
 
+  // Folder counts follow changes made here right away, without waiting for a sync.
+  const counts = async () => {
+    const { folders } = await api("GET", `/mail/folders?accountId=${accountId}`);
+    const by = (role: string) => folders.find((f: { role: string }) => f.role === role);
+    return {
+      inbox: by("inbox").messageCount as number,
+      unread: by("inbox").unreadCount as number,
+      trash: by("trash").messageCount as number,
+    };
+  };
+  await api("POST", "/mail/messages/mark", { ids: [a, b, c], read: false });
+  const before = await counts();
+
   await call(client, "mark_messages", { ids: [a], read: true, flagged: true });
+  assert.equal((await counts()).unread, before.unread - 1, "reading lowers the unread count");
   const imap = await imapFor(BOB);
   const lock = await imap.getMailboxLock("INBOX");
   const flagged = (await imap.search({ flagged: true, seen: true }, { uid: true })) || [];
@@ -324,6 +338,10 @@ test("mcp: organize + delete are write-through to the mail server", { skip }, as
   const del = await call(client, "delete_messages", { ids: [c] });
   assert.deepEqual(del.data, { trashed: 1, deleted: 0 });
   assert.equal(await imapCount("Trash"), 1, "trashed on server");
+  const after = await counts();
+  assert.equal(after.inbox, before.inbox - 2, "moving and deleting lower the inbox total");
+  assert.equal(after.unread, before.unread - 3, "…and its unread count");
+  assert.equal(after.trash, before.trash + 1, "Trash goes up");
 
   const perm = await call(client, "delete_messages", { ids: [a], permanent: true });
   assert.ok(

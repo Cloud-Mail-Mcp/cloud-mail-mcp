@@ -102,6 +102,9 @@ const asRemote = (f: FolderRow): RemoteFolder => ({
   selectable: true,
 });
 
+/** Where a message sits: one folder copy, its UID there, and whether that copy is read. */
+type Place = { folder: FolderRow; uid: number | null; seen: boolean };
+
 export class MailService {
   constructor(
     private s: Services,
@@ -126,6 +129,23 @@ export class MailService {
     return f;
   }
 
+  /**
+   * Keep folder totals and unread counts right immediately after a change made here. (They come
+   * from the mail server on each sync, which would otherwise leave them stale until the next one.)
+   */
+  private async bumpCounts(deltas: Map<number, { total: number; unread: number }>) {
+    for (const [id, d] of deltas) {
+      if (!d.total && !d.unread) continue;
+      await this.db
+        .update(folders)
+        .set({
+          messageCount: sql`greatest(0, ${folders.messageCount} + ${d.total})`,
+          unreadCount: sql`greatest(0, ${folders.unreadCount} + ${d.unread})`,
+        })
+        .where(eq(folders.id, id));
+    }
+  }
+
   /** Resolve message ids to accounts and check the actor's scope + folder rules. */
   private async resolve(access: Access, ids: number[], scope: Scope) {
     if (!ids.length) throw new MailError("No message ids given.");
@@ -141,6 +161,7 @@ export class MailService {
       .select({
         messageId: messageFolders.messageId,
         uid: messageFolders.remoteUid,
+        seen: messageFolders.seen,
         folder: folders,
       })
       .from(messageFolders)
@@ -154,7 +175,7 @@ export class MailService {
         items: Array<{
           id: number;
           remoteId: string;
-          places: Array<{ folder: FolderRow; uid: number | null }>;
+          places: Place[];
         }>;
       }
     >();
@@ -163,7 +184,7 @@ export class MailService {
       const grant = requireScope(access, m.accountId, scope);
       const places = memberships
         .filter((x) => x.messageId === id)
-        .map((x) => ({ folder: x.folder, uid: x.uid }));
+        .map((x) => ({ folder: x.folder, uid: x.uid, seen: x.seen }));
       if (
         places.length &&
         !places.some((p) => folderAllowed(grant, p.folder.path, p.folder.role))
@@ -563,6 +584,15 @@ export class MailService {
         .set(set)
         .where(and(eq(messages.accountId, accountId), inArray(messages.id, idList)));
       if (change.read !== undefined) {
+        const deltas = new Map<number, { total: number; unread: number }>();
+        for (const it of items)
+          for (const p of it.places) {
+            if (p.seen === change.read) continue;
+            const d = deltas.get(p.folder.id) ?? { total: 0, unread: 0 };
+            d.unread += change.read ? -1 : 1;
+            deltas.set(p.folder.id, d);
+          }
+        await this.bumpCounts(deltas);
         await this.db
           .update(messageFolders)
           .set({ seen: change.read })
@@ -592,11 +622,7 @@ export class MailService {
 
   private async moveWithin(
     accountId: string,
-    items: Array<{
-      id: number;
-      remoteId: string;
-      places: Array<{ folder: FolderRow; uid: number | null }>;
-    }>,
+    items: Array<{ id: number; remoteId: string; places: Place[] }>,
     dest: FolderRow,
   ) {
     const groups = new Map<number, { folder: FolderRow; refs: MessageRef[]; ids: number[] }>();
@@ -623,6 +649,22 @@ export class MailService {
           ),
         );
     }
+    const deltas = new Map<number, { total: number; unread: number }>();
+    const bump = (folderId: number, total: number, unread: number) => {
+      const d = deltas.get(folderId) ?? { total: 0, unread: 0 };
+      d.total += total;
+      d.unread += unread;
+      deltas.set(folderId, d);
+    };
+    for (const it of items) {
+      const moved = it.places.filter(
+        (p) => p.uid && p.folder.id !== dest.id && p.folder.role !== "all",
+      );
+      if (!moved.length) continue;
+      for (const p of moved) bump(p.folder.id, -1, p.seen ? 0 : -1);
+      bump(dest.id, 1, moved.some((p) => !p.seen) ? 1 : 0);
+    }
+    await this.bumpCounts(deltas);
     // The destination copy gets a new UID; a quick sync picks it up (and cleans the old row).
     await this.s.jobs.enqueueSync({ accountId, reason: "move" }).catch(() => {});
   }
@@ -669,6 +711,15 @@ export class MailService {
           for (const g of groups.values()) await c.expunge(asRemote(g.folder), g.refs);
         });
         const idList = toExpunge.map((i) => i.id);
+        const deltas = new Map<number, { total: number; unread: number }>();
+        for (const it of toExpunge)
+          for (const p of it.places) {
+            const d = deltas.get(p.folder.id) ?? { total: 0, unread: 0 };
+            d.total -= 1;
+            d.unread -= p.seen ? 0 : 1;
+            deltas.set(p.folder.id, d);
+          }
+        await this.bumpCounts(deltas);
         await this.db
           .delete(messageFolders)
           .where(

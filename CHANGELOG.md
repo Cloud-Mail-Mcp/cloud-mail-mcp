@@ -40,6 +40,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   buttons also move on to the next message.
 - **J** / **K** move to the next / previous message.
 - **Unread only** filter for folders and search.
+- Select several messages to act on them together: tick the checkboxes, **Shift**-click to select
+  a range, **Ctrl/⌘**-click to add or remove one, or **Select all**, then untick any you want to
+  keep. Mark read or unread, flag, archive, move to a folder, or delete them in one go (across
+  mailboxes too). **X** selects the open message, **Delete** deletes the selection, **Esc**
+  clears it. In Trash, deleting asks first, because it's permanent.
+- Opening an unread message marks it as read.
+- Folder and unread counts update immediately when you read, move, archive or delete mail,
+  instead of waiting for the next sync.
 
 ### Install and updates
 

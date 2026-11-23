@@ -1,4 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Spinner } from "../components/ui";
 import {
@@ -354,6 +360,11 @@ export function MailPage() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
+  // Multi-select: checked rows, and the last row clicked (shift-click selects the range to it).
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [anchor, setAnchor] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const byAccountRef = useRef<Map<string, MailFolder[]>>(new Map());
   const [sort, setSort] = useState<string>(() => {
     try {
       return localStorage.getItem("mailmcp.sort") ?? "date:desc";
@@ -364,6 +375,7 @@ export function MailPage() {
   const changeSort = (v: string) => {
     setSort(v);
     setSelected(null);
+    setChecked(new Set());
     try {
       localStorage.setItem("mailmcp.sort", v);
     } catch {
@@ -382,6 +394,7 @@ export function MailPage() {
     const v = !unreadOnly;
     setUnreadOnly(v);
     setSelected(null);
+    setChecked(new Set());
     try {
       localStorage.setItem("mailmcp.unreadOnly", v ? "1" : "0");
     } catch {
@@ -423,43 +436,183 @@ export function MailPage() {
     qc.invalidateQueries({ queryKey: ["mail-folders"] });
   };
 
-  /** Delete or archive a message and open the next one in the list (or the previous at the end). */
-  const removeMessage = async (id: number, kind: "trash" | "archive") => {
-    const i = rows.findIndex((r) => r.id === id);
-    const next = i >= 0 ? (rows[i + 1] ?? rows[i - 1] ?? null) : null;
-    setRemoveErr(null);
-    setRemoved((s) => new Set(s).add(id));
-    setSelected(next?.id ?? null);
-    try {
-      await (kind === "trash"
-        ? api("/mail/messages/delete", { method: "POST", body: { ids: [id] } })
-        : api("/mail/messages/move", { method: "POST", body: { ids: [id], folder: "archive" } }));
-      refresh();
-    } catch (e) {
-      setRemoved((s) => {
-        const n = new Set(s);
-        n.delete(id);
-        return n;
-      });
-      setRemoveErr(
-        `Couldn't ${kind === "trash" ? "delete" : "archive"} that message: ${(e as Error).message}`,
-      );
-    }
+  const viewFolder = (foldersQ.data?.folders ?? []).find((f) => String(f.id) === view.folder);
+  const inTrash = viewFolder?.role === "trash";
+  const confirmErase = (n: number) =>
+    !inTrash ||
+    window.confirm(
+      `Permanently delete ${n === 1 ? "this message" : `${n} messages`}? They're already in Trash, so this can't be undone.`,
+    );
+
+  /** Change rows in every cached list at once (instant feedback before the server confirms). */
+  const patchRows = (ids: number[], patch: Partial<MessageSummary>) => {
+    const set = new Set(ids);
+    qc.setQueriesData<InfiniteData<MessagePage>>({ queryKey: ["mail-list"] }, (old) =>
+      old
+        ? {
+            ...old,
+            pages: old.pages.map((pg) => ({
+              ...pg,
+              messages: pg.messages.map((m) => (set.has(m.id) ? { ...m, ...patch } : m)),
+            })),
+          }
+        : old,
+    );
   };
 
+  type BulkKind = "read" | "unread" | "flag" | "unflag" | "archive" | "trash" | "move";
+  const LABELS: Record<BulkKind, string> = {
+    read: "mark as read",
+    unread: "mark as unread",
+    flag: "flag",
+    unflag: "unflag",
+    archive: "archive",
+    trash: "delete",
+    move: "move",
+  };
+
+  /**
+   * Apply an action to messages. Moves (delete/archive/move) hide them at once and, if the open
+   * message is among them, open the next one; the server calls run behind (500 per request).
+   */
+  const act = async (ids: number[], kind: BulkKind, folder?: string | number) => {
+    if (!ids.length) return;
+    if (kind === "trash" && !confirmErase(ids.length)) return;
+    const removes = kind === "archive" || kind === "trash" || kind === "move";
+    setRemoveErr(null);
+    if (removes) {
+      const gone = new Set(ids);
+      if (selected != null && gone.has(selected)) {
+        const i = rows.findIndex((r) => r.id === selected);
+        const next =
+          rows.slice(i + 1).find((r) => !gone.has(r.id)) ??
+          rows
+            .slice(0, Math.max(0, i))
+            .reverse()
+            .find((r) => !gone.has(r.id));
+        setSelected(next?.id ?? null);
+      }
+      setRemoved((s) => new Set([...s, ...ids]));
+    }
+    setChecked((c) => {
+      const n = new Set(c);
+      for (const id of ids) n.delete(id);
+      return n;
+    });
+    if (!removes) {
+      // Show the new read/flag state right away; the refresh afterwards confirms it.
+      patchRows(
+        ids,
+        kind === "read" || kind === "unread"
+          ? { unread: kind === "unread" }
+          : { flagged: kind === "flag" },
+      );
+    }
+    setBulkBusy(true);
+    try {
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500);
+        if (kind === "trash")
+          await api("/mail/messages/delete", { method: "POST", body: { ids: chunk } });
+        else if (removes)
+          await api("/mail/messages/move", {
+            method: "POST",
+            body: { ids: chunk, folder: kind === "archive" ? "archive" : folder },
+          });
+        else
+          await api("/mail/messages/mark", {
+            method: "POST",
+            body:
+              kind === "read" || kind === "unread"
+                ? { ids: chunk, read: kind === "read" }
+                : { ids: chunk, flagged: kind === "flag" },
+          });
+      }
+    } catch (e) {
+      if (removes)
+        setRemoved((s) => {
+          const n = new Set(s);
+          for (const id of ids) n.delete(id);
+          return n;
+        });
+      setRemoveErr(
+        `Couldn't ${LABELS[kind]} ${ids.length === 1 ? "that message" : `${ids.length} messages`}: ${(e as Error).message}`,
+      );
+    } finally {
+      setBulkBusy(false);
+      refresh();
+      if (selected != null) qc.invalidateQueries({ queryKey: ["thread", selected] });
+    }
+  };
+  const removeMessage = (id: number, kind: "trash" | "archive") => act([id], kind);
+  const checkedIds = rows.filter((r) => checked.has(r.id)).map((r) => r.id);
+
+  /** Click a checkbox (or Ctrl/⌘-click a row); with Shift, select everything up to the last one. */
+  const toggleCheck = (id: number, shift: boolean) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      const on = !prev.has(id);
+      const a = anchor == null ? -1 : rows.findIndex((r) => r.id === anchor);
+      const b = rows.findIndex((r) => r.id === id);
+      if (shift && a >= 0 && b >= 0) {
+        for (let i = Math.min(a, b); i <= Math.max(a, b); i++) {
+          const rid = (rows[i] as MessageSummary).id;
+          on ? next.add(rid) : next.delete(rid);
+        }
+      } else if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    setAnchor(id);
+  };
+  const allChecked = rows.length > 0 && checkedIds.length === rows.length;
+  const someChecked = checkedIds.length > 0 && !allChecked;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someChecked;
+  }, [someChecked]);
+
+  // Folders the checked messages can move to: by id within one account, by name across several.
+  const moveTargets = useMemo(() => {
+    const accountIds = [...new Set(rows.filter((r) => checked.has(r.id)).map((r) => r.accountId))];
+    if (!accountIds.length) return [];
+    const usable = (f: MailFolder) => f.role !== "all" && f.role !== "drafts";
+    const label = (f: MailFolder) => (f.role ? (ROLE_LABEL[f.role] ?? f.path) : f.path);
+    if (accountIds.length === 1)
+      return (byAccountRef.current.get(accountIds[0] as string) ?? [])
+        .filter(usable)
+        .map((f) => ({ value: String(f.id), label: label(f) }));
+    const lists = accountIds.map((id) => (byAccountRef.current.get(id) ?? []).filter(usable));
+    const keyOf = (f: MailFolder) => f.role ?? f.path.toLowerCase();
+    const first = lists[0] ?? [];
+    return first
+      .filter((f) => lists.every((l) => l.some((g) => keyOf(g) === keyOf(f))))
+      .map((f) => ({ value: `name:${keyOf(f)}`, label: label(f) }));
+  }, [rows, checked]);
+
   // Keyboard: Delete/Backspace deletes the open message, J/K move down/up the list.
-  const keyState = useRef({ selected, rows, removeMessage });
-  keyState.current = { selected, rows, removeMessage };
+  const keyState = useRef({ selected, rows, removeMessage, checkedIds, act, toggleCheck });
+  keyState.current = { selected, rows, removeMessage, checkedIds, act, toggleCheck };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']"))
         return;
-      const { selected: sel, rows: list, removeMessage: remove } = keyState.current;
-      if ((e.key === "Delete" || e.key === "Backspace") && sel != null) {
+      const k = keyState.current;
+      const { selected: sel, rows: list, removeMessage: remove } = k;
+      if ((e.key === "Delete" || e.key === "Backspace") && k.checkedIds.length) {
+        e.preventDefault();
+        void k.act(k.checkedIds, "trash");
+      } else if ((e.key === "Delete" || e.key === "Backspace") && sel != null) {
         e.preventDefault();
         void remove(sel, "trash");
+      } else if (e.key === "x" && sel != null) {
+        e.preventDefault();
+        k.toggleCheck(sel, false);
+      } else if (e.key === "Escape" && k.checkedIds.length) {
+        e.preventDefault();
+        setChecked(new Set());
       } else if (e.key === "j" || e.key === "k") {
         const i = sel == null ? -1 : list.findIndex((r) => r.id === sel);
         const target = e.key === "j" ? list[i + 1] : list[Math.max(0, i - 1)];
@@ -476,6 +629,27 @@ export function MailPage() {
     if (selected != null)
       document.getElementById(`msg-${selected}`)?.scrollIntoView({ block: "nearest" });
   }, [selected]);
+
+  // Opening an unread message marks it read once it has been open for a moment (so skimming
+  // past with J/K doesn't). The row stays in an "Unread only" list until the list refreshes.
+  const openState = useRef({ rows, patchRows });
+  openState.current = { rows, patchRows };
+  useEffect(() => {
+    if (selected == null) return;
+    const row = openState.current.rows.find((r) => r.id === selected);
+    if (!row?.unread) return;
+    const t = setTimeout(async () => {
+      openState.current.patchRows([selected], { unread: false });
+      try {
+        await api("/mail/messages/mark", { method: "POST", body: { ids: [selected], read: true } });
+      } catch {
+        // e.g. no permission to change flags: the next refresh shows the real state
+      }
+      qc.invalidateQueries({ queryKey: ["mail-folders"] });
+      qc.invalidateQueries({ queryKey: ["thread", selected] });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [selected, qc]);
 
   // Folder list: each account folds away. With many accounts, start folded except the open one.
   const [expanded, setExpanded] = useState<Set<string> | null>(() => {
@@ -517,11 +691,14 @@ export function MailPage() {
     }
     return m;
   }, [foldersQ.data]);
+  byAccountRef.current = byAccount;
   const totalUnread = (foldersQ.data?.folders ?? [])
     .filter((f) => f.role === "inbox")
     .reduce((n, f) => n + f.unreadCount, 0);
 
   const pick = (v: View) => {
+    setChecked(new Set());
+    setAnchor(null);
     setRemoved(new Set());
     setRemoveErr(null);
     setView(v);
@@ -645,6 +822,7 @@ export function MailPage() {
             e.preventDefault();
             setQuery(search.trim());
             setSelected(null);
+            setChecked(new Set());
           }}
           className="border-b border-zinc-200 p-3 dark:border-zinc-800"
         >
@@ -691,6 +869,82 @@ export function MailPage() {
             </label>
           </div>
         </form>
+        {rows.length > 0 && (
+          <div
+            role="toolbar"
+            aria-label="Selected messages"
+            className="flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800"
+          >
+            <label className="mr-1 flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allChecked}
+                onChange={() => setChecked(allChecked ? new Set() : new Set(rows.map((r) => r.id)))}
+                className="size-4 accent-blue-600"
+              />
+              {checkedIds.length ? `${checkedIds.length} selected` : "Select all"}
+            </label>
+            {checkedIds.length > 0 && (
+              <>
+                {(
+                  [
+                    ["read", "Read"],
+                    ["unread", "Unread"],
+                    ["flag", "Flag"],
+                    ["unflag", "Unflag"],
+                    ["archive", "Archive"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    disabled={bulkBusy}
+                    onClick={() => void act(checkedIds, k)}
+                    className="rounded border border-zinc-300 px-1.5 py-0.5 text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    {label}
+                  </button>
+                ))}
+                {moveTargets.length > 0 && (
+                  <select
+                    aria-label="Move selected to folder"
+                    value=""
+                    disabled={bulkBusy}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v) return;
+                      void act(checkedIds, "move", v.startsWith("name:") ? v.slice(5) : Number(v));
+                    }}
+                    className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  >
+                    <option value="">Move to…</option>
+                    {moveTargets.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => void act(checkedIds, "trash")}
+                  className="rounded border border-red-300 px-1.5 py-0.5 text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                >
+                  {inTrash ? "Delete forever" : "Delete"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChecked(new Set())}
+                  className="ml-auto text-zinc-500 hover:text-zinc-800 hover:underline dark:hover:text-zinc-200"
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {removeErr && (
           <div className="border-b border-zinc-200 p-3 dark:border-zinc-800">
             <Alert tone="error" title={removeErr} />
@@ -716,12 +970,37 @@ export function MailPage() {
           ) : (
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {rows.map((m) => (
-                <li key={m.id} id={`msg-${m.id}`}>
+                <li
+                  key={m.id}
+                  id={`msg-${m.id}`}
+                  className={`flex items-start ${
+                    selected === m.id
+                      ? "bg-blue-50 dark:bg-blue-950/40"
+                      : checked.has(m.id)
+                        ? "bg-amber-50/70 dark:bg-amber-950/20"
+                        : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked.has(m.id)}
+                    onChange={() => {}}
+                    onClick={(e) => toggleCheck(m.id, e.shiftKey)}
+                    aria-label={`Select: ${m.subject || "(no subject)"}`}
+                    className="ml-3 mt-3.5 size-4 shrink-0 cursor-pointer accent-blue-600"
+                  />
                   <button
                     type="button"
-                    onClick={() => setSelected(m.id)}
+                    onClick={(e) => {
+                      // Ctrl/⌘-click toggles selection, Shift-click selects a range; plain click opens.
+                      if (e.metaKey || e.ctrlKey || e.shiftKey) {
+                        e.preventDefault();
+                        window.getSelection()?.removeAllRanges();
+                        toggleCheck(m.id, e.shiftKey);
+                      } else setSelected(m.id);
+                    }}
                     aria-pressed={selected === m.id}
-                    className={`block w-full px-4 py-3 text-left ${selected === m.id ? "bg-blue-50 dark:bg-blue-950/40" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"}`}
+                    className="block min-w-0 flex-1 py-3 pl-2.5 pr-4 text-left"
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span
@@ -797,9 +1076,12 @@ export function MailPage() {
         ) : (
           <div className="mt-20 text-center text-sm text-zinc-500">
             <p>Select a message to read it.</p>
-            <p className="mt-2 text-xs text-zinc-400">
+            <p className="mx-auto mt-2 max-w-sm text-xs text-zinc-400">
               Shortcuts: <kbd className="font-sans">J</kbd> / <kbd className="font-sans">K</kbd>{" "}
-              next and previous · <kbd className="font-sans">Delete</kbd> deletes and opens the next
+              next and previous · <kbd className="font-sans">Delete</kbd> deletes (the selected
+              messages, or the open one) · <kbd className="font-sans">X</kbd> selects the open
+              message · <kbd className="font-sans">Esc</kbd> clears the selection · Shift-click
+              selects a range, Ctrl/⌘-click adds one
             </p>
           </div>
         )}
