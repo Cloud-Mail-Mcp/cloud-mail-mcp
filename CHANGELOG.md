@@ -83,6 +83,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - After a change, MailMCP syncs straight away and the new-mail listener reconnects with the new
   settings (it used to stay on the old server).
 - **Accounts** moved down the menu, next to Settings.
+- Choosing Gmail or iCloud when adding an account shows step-by-step instructions for creating
+  an app password, with buttons that open the right Google or Apple page. The same steps appear
+  on the account's settings page when its password needs replacing. Spaces in pasted Gmail app
+  passwords are removed automatically.
 
 ### Install and updates
 

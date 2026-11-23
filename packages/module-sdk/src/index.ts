@@ -69,6 +69,8 @@ export interface ProviderPreset {
   domains: string[]; // ["icloud.com", "me.com", "mac.com"]
   defaults: Record<string, unknown>;
   help?: string; // e.g. "Create an app-specific password at appleid.apple.com"
+  /** Step-by-step setup shown when this provider is picked, with links that open in a new tab. */
+  steps?: Array<{ text: string; link?: { label: string; url: string } }>;
 }
 
 export function defineModule<Config extends z.ZodTypeAny>(

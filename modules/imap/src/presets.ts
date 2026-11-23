@@ -9,9 +9,19 @@ export const presets: ProviderPreset[] = [
       imap: { host: "imap.mail.me.com", port: 993, secure: true },
       smtp: { host: "smtp.mail.me.com", port: 587, secure: false },
     },
-    help:
-      "Use an app-specific password (appleid.apple.com → Sign-In and Security → App-Specific Passwords). " +
-      "Username is your full iCloud address.",
+    help: "iCloud needs an app-specific password; your normal Apple Account password won't work.",
+    steps: [
+      {
+        text: "Sign in to your Apple Account and open Sign-In and Security → App-Specific Passwords. Two-factor authentication must be on (it is for most Apple Accounts).",
+        link: { label: "Open Apple Account", url: "https://account.apple.com/account/manage" },
+      },
+      {
+        text: 'Create a password named "MailMCP". Apple shows it once, as xxxx-xxxx-xxxx-xxxx.',
+      },
+      {
+        text: "Paste it into Password below, dashes included. Use your full iCloud address (…@icloud.com) as the email.",
+      },
+    ],
   },
   {
     id: "gmail",
@@ -21,9 +31,21 @@ export const presets: ProviderPreset[] = [
       imap: { host: "imap.gmail.com", port: 993, secure: true },
       smtp: { host: "smtp.gmail.com", port: 465, secure: true },
     },
-    help:
-      "Requires 2-Step Verification, then create an app password at myaccount.google.com/apppasswords. " +
-      "Note: Gmail limits IMAP downloads to ~2.5 GB/day; MailMCP syncs headers first and backfills bodies within that limit.",
+    help: "Gmail needs an app password; your normal Google password won't work. Gmail limits IMAP downloads to about 2.5 GB a day, so big mailboxes fill in over a few days (newest mail first).",
+    steps: [
+      {
+        text: "Turn on 2-Step Verification for your Google Account, if it isn't already.",
+        link: {
+          label: "Open 2-Step Verification",
+          url: "https://myaccount.google.com/signinoptions/twosv",
+        },
+      },
+      {
+        text: 'Create an app password named "MailMCP". Google shows a 16-letter password once. On Google Workspace, if the page says app passwords aren\'t available, ask your admin to allow them.',
+        link: { label: "Create an app password", url: "https://myaccount.google.com/apppasswords" },
+      },
+      { text: "Paste it into Password below (spaces are removed for you)." },
+    ],
   },
   {
     id: "cpanel",

@@ -179,6 +179,49 @@ function TestOutcome({ result }: { result: TestResult }) {
 
 // ───────────────────────────── Add ─────────────────────────────
 
+type Preset = ModuleInfo["presets"][number];
+
+/** How to get a working password for this provider (app passwords for Gmail and iCloud). */
+function ProviderSteps({ preset }: { preset: Preset }) {
+  if (!preset.help && !preset.steps?.length) return null;
+  return (
+    <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+      {preset.help && <p>{preset.help}</p>}
+      {preset.steps?.length ? (
+        <ol className="mt-2 list-decimal space-y-2 pl-5">
+          {preset.steps.map((s) => (
+            <li key={s.text}>
+              {s.text}
+              {s.link && (
+                <a
+                  href={s.link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-2 inline-flex items-center rounded border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200 dark:hover:bg-blue-900"
+                >
+                  {s.link.label} ↗
+                </a>
+              )}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+/** Gmail shows app passwords as "abcd efgh ijkl mnop"; the spaces aren't part of it. */
+function cleanPassword(presetId: string | null | undefined, config: Obj): Obj {
+  const pw = config.password;
+  if (
+    presetId === "gmail" &&
+    typeof pw === "string" &&
+    /^[a-z]{4}( ?[a-z]{4}){3}$/i.test(pw.trim())
+  )
+    return { ...config, password: pw.replace(/\s+/g, "") };
+  return config;
+}
+
 /** The connection form: provider detection, test, save. Used by Accounts and the setup wizard. */
 export function AddAccountForm({
   onSaved,
@@ -222,7 +265,7 @@ export function AddAccountForm({
     moduleId: "imap",
     address: email,
     displayName: displayName || undefined,
-    config,
+    config: cleanPassword(activePresetId, config),
   });
 
   const testM = useMutation({
@@ -296,9 +339,7 @@ export function AddAccountForm({
               }
             }}
           />
-          {preset?.help && (
-            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{preset.help}</p>
-          )}
+          {preset && <ProviderSteps preset={preset} />}
         </div>
 
         <div className="mt-5 max-w-sm">
@@ -406,6 +447,12 @@ export function AccountDetailPage({ id }: { id: string }) {
   });
   const account = q.data?.account;
   const module = modulesQ.data?.modules.find((m) => m.id === account?.moduleId);
+  // The provider this account uses (Gmail, iCloud…), to show how to get a new app password.
+  const imapHost = (cfg?: Record<string, unknown>) =>
+    ((cfg?.imap as { host?: string } | undefined)?.host ?? "").toLowerCase();
+  const preset = module?.presets.find(
+    (p) => imapHost(p.defaults) && imapHost(p.defaults) === imapHost(account?.config),
+  );
 
   const [displayName, setDisplayName] = useState("");
   const [label, setLabel] = useState("");
@@ -437,7 +484,7 @@ export function AccountDetailPage({ id }: { id: string }) {
         body: {
           displayName: displayName || null,
           label: label || null,
-          config,
+          config: cleanPassword(preset?.id, config),
           skipTest: opts.skipTest,
         },
       }),
@@ -580,6 +627,11 @@ export function AccountDetailPage({ id }: { id: string }) {
             Changed your password, or did the mail server's address change? Update it here. MailMCP
             logs in with the new settings before saving them.
           </p>
+          {preset?.steps?.length ? (
+            <div className="mb-5">
+              <ProviderSteps preset={preset} />
+            </div>
+          ) : null}
           <form
             onSubmit={(e) => {
               e.preventDefault();

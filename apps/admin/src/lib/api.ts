@@ -95,6 +95,7 @@ export interface ModuleInfo {
     domains: string[];
     defaults: Record<string, unknown>;
     help?: string;
+    steps?: Array<{ text: string; link?: { label: string; url: string } }>;
   }>;
   ui: {
     secretFields: string[];
