@@ -51,6 +51,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   button.
 - Folder and unread counts update immediately when you read, move, archive or delete mail,
   instead of waiting for the next sync.
+- **Unsubscribe** button on newsletters and other list mail (any message with a
+  List-Unsubscribe header). It uses the sender's one-click unsubscribe when they support it,
+  otherwise sends their unsubscribe email from your account, otherwise opens their unsubscribe
+  page. Messages you've unsubscribed from show "Unsubscribed".
+- AI agents can unsubscribe too, with the new **Unsubscribe** permission (`unsubscribe` tool).
+  It's included in the Assistant presets. Unsubscribing by email counts as sending, so it
+  follows the agent's send policy and can wait for your approval.
 
 ### Install and updates
 

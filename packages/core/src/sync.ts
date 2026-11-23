@@ -34,6 +34,7 @@ import { friendlyError } from "./errors";
 import { createLogger } from "./logger";
 import { type ParsedBody, parseRaw, sha256, snippetOf } from "./parse";
 import type { SettingsService } from "./settings";
+import { parseUnsubscribe } from "./unsubscribe";
 
 type FolderRow = typeof folders.$inferSelect;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -209,6 +210,10 @@ export class BodyService {
           rawBlobKey: rawKey,
           bodyBlobKey: bodyKey,
           bodyState: "fetched",
+          // Remember how to unsubscribe (null = no List-Unsubscribe header).
+          headersExtra: sql`coalesce(${messages.headersExtra}, '{}'::jsonb) || ${JSON.stringify({
+            unsubscribe: parseUnsubscribe(raw),
+          })}::jsonb`,
           snippet: snippetOf(parsed.text),
           hasAttachments: parsed.attachments.some((a) => !a.inline),
         })

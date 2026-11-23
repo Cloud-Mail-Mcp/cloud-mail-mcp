@@ -28,6 +28,7 @@ const SCOPE_LABELS: Array<[string, string, string]> = [
   ["mail:organize", "Organize", "Mark read/unread, flag, move between folders"],
   ["mail:draft", "Drafts", "Save drafts for you to review"],
   ["mail:send", "Send", "Send, reply and forward (see send policy)"],
+  ["mail:unsubscribe", "Unsubscribe", "Leave mailing lists with the sender's unsubscribe link"],
   ["mail:delete", "Delete", "Move mail to Trash"],
   ["mail:delete:permanent", "Delete permanently", "Erase mail for good"],
   ["folders:manage", "Manage folders", "Create, rename and delete folders"],
@@ -38,13 +39,13 @@ export const PRESETS: Record<string, { label: string; scopes: string[]; sendPoli
     none: { label: "No access", scopes: [], sendPolicy: "deny" },
     read: { label: "Read only", scopes: ["mail:read"], sendPolicy: "deny" },
     assistant: {
-      label: "Assistant (read, organize, drafts)",
-      scopes: ["mail:read", "mail:organize", "mail:draft"],
+      label: "Assistant (read, organize, drafts, unsubscribe)",
+      scopes: ["mail:read", "mail:organize", "mail:draft", "mail:unsubscribe"],
       sendPolicy: "deny",
     },
     sender: {
       label: "Assistant + send with approval",
-      scopes: ["mail:read", "mail:organize", "mail:draft", "mail:send"],
+      scopes: ["mail:read", "mail:organize", "mail:draft", "mail:unsubscribe", "mail:send"],
       sendPolicy: "approve",
     },
   };
@@ -726,6 +727,7 @@ export function PermissionsPage() {
       s.has("mail:read") && "read",
       s.has("mail:organize") && "organize",
       s.has("mail:draft") && "drafts",
+      s.has("mail:unsubscribe") && "unsubscribe",
       s.has("mail:send") &&
         (g.sendPolicy === "approve" ? "send (approval)" : g.sendPolicy === "allow" ? "send" : null),
       (s.has("mail:delete") || s.has("mail:delete:permanent")) && "delete",

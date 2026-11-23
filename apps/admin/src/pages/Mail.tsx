@@ -16,6 +16,7 @@ import {
   type MessagePage,
   type MessageSummary,
   shortDate,
+  type UnsubscribeOutcome,
 } from "../lib/api";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -188,6 +189,67 @@ function MessageCard({
   );
 }
 
+/** Leave the mailing list a message came from (List-Unsubscribe). */
+function UnsubscribeButton({
+  m,
+  busy,
+  onUnsubscribe,
+}: {
+  m: MessageDetail;
+  busy: boolean;
+  onUnsubscribe: () => void;
+}) {
+  const u = m.unsubscribe!;
+  const sender = m.from?.name || m.from?.email || "this sender";
+  if (u.unsubscribedAt)
+    return (
+      <Button
+        variant="secondary"
+        disabled
+        title={`Unsubscribed ${new Date(u.unsubscribedAt).toLocaleString()}`}
+      >
+        Unsubscribed
+      </Button>
+    );
+  if (u.method === "website" && u.website)
+    return (
+      <a
+        href={u.website}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        title={`Opens ${sender}'s unsubscribe page`}
+        className="inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+      >
+        Unsubscribe ↗
+      </a>
+    );
+  return (
+    <Button
+      variant="secondary"
+      busy={busy}
+      title={
+        u.method === "one_click"
+          ? `Unsubscribe from ${sender} with their one-click link`
+          : `Send ${sender} an unsubscribe email`
+      }
+      onClick={() => {
+        if (
+          window.confirm(
+            `Unsubscribe from ${sender}?\n\n${
+              u.method === "one_click"
+                ? "MailMCP will use the sender's one-click unsubscribe link."
+                : "MailMCP will send the sender an unsubscribe email from this account."
+            }`,
+          )
+        )
+          onUnsubscribe();
+      }}
+    >
+      Unsubscribe
+    </Button>
+  );
+}
+
 function Reader({
   id,
   onClose,
@@ -233,6 +295,33 @@ function Reader({
     onSuccess: async () => {
       onChanged();
       await qc.invalidateQueries({ queryKey: ["thread", id] });
+    },
+    onError: (e) => setErr((e as Error).message),
+  });
+  const unsubscribe = useMutation({
+    mutationFn: (messageId: number) =>
+      api<UnsubscribeOutcome>(`/mail/messages/${messageId}/unsubscribe`, { method: "POST" }),
+    onMutate: () => {
+      setErr(null);
+      setNote(null);
+    },
+    onSuccess: (r, messageId) => {
+      setNote(r.note);
+      if (r.status === "unsubscribed") {
+        const at = new Date().toISOString();
+        qc.setQueryData<{ messages: MessageDetail[] }>(
+          ["thread", id],
+          (t) =>
+            t && {
+              messages: t.messages.map((m) =>
+                m.id === messageId && m.unsubscribe
+                  ? { ...m, unsubscribe: { ...m.unsubscribe, unsubscribedAt: at } }
+                  : m,
+              ),
+            },
+        );
+      }
+      void qc.invalidateQueries({ queryKey: ["thread", id] });
     },
     onError: (e) => setErr((e as Error).message),
   });
@@ -288,6 +377,13 @@ function Reader({
           >
             {current.flagged ? "Unflag" : "Flag"}
           </Button>
+          {current.unsubscribe && (
+            <UnsubscribeButton
+              m={current}
+              busy={unsubscribe.isPending}
+              onUnsubscribe={() => unsubscribe.mutate(current.id)}
+            />
+          )}
           <Button variant="secondary" onClick={() => onRemove("archive")}>
             Archive
           </Button>

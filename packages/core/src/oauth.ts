@@ -1,6 +1,4 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import {
   agents,
   and,
@@ -15,6 +13,7 @@ import {
 } from "@mailmcp/db";
 import type { AgentService } from "./agents";
 import { audit } from "./audit";
+import { publicHost } from "./net";
 import type { Access, PolicyService } from "./policy";
 import type { Scope } from "./scopes";
 
@@ -52,13 +51,19 @@ export const GRANT_PRESETS = {
   none: { label: "No access", scopes: [] as Scope[], sendPolicy: "deny" as const },
   read: { label: "Read only", scopes: ["mail:read"] as Scope[], sendPolicy: "deny" as const },
   assistant: {
-    label: "Read, organize & draft",
-    scopes: ["mail:read", "mail:organize", "mail:draft"] as Scope[],
+    label: "Read, organize, draft & unsubscribe",
+    scopes: ["mail:read", "mail:organize", "mail:draft", "mail:unsubscribe"] as Scope[],
     sendPolicy: "deny" as const,
   },
   send_approval: {
     label: "…and send with my approval",
-    scopes: ["mail:read", "mail:organize", "mail:draft", "mail:send"] as Scope[],
+    scopes: [
+      "mail:read",
+      "mail:organize",
+      "mail:draft",
+      "mail:unsubscribe",
+      "mail:send",
+    ] as Scope[],
     sendPolicy: "approve" as const,
   },
 } as const;
@@ -105,40 +110,13 @@ export function redirectAllowed(registered: string[], requested: string): boolea
   });
 }
 
-// ───────────────────────────── SSRF guard for metadata documents ─────────────────────────────
-
-function privateAddress(ip: string): boolean {
-  if (ip.includes(":")) {
-    const v = ip.toLowerCase();
-    return (
-      v === "::1" ||
-      v === "::" ||
-      v.startsWith("fc") ||
-      v.startsWith("fd") ||
-      v.startsWith("fe80") ||
-      v.startsWith("::ffff:")
-    );
-  }
-  const [a, b] = ip.split(".").map(Number) as [number, number];
-  return (
-    a === 10 ||
-    a === 127 ||
-    a === 0 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    a >= 224
-  );
-}
+// ───────────────────────────── client metadata documents ─────────────────────────────
 
 async function fetchClientMetadata(url: string): Promise<Record<string, unknown>> {
   const u = new URL(url);
   if (u.protocol !== "https:" || !u.pathname || u.pathname === "/")
     throw new OAuthError("invalid_client", "Client ID must be an https URL with a path.");
-  const host = u.hostname.replace(/^\[|\]$/g, "");
-  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-  if (!addrs.length || addrs.some((a) => privateAddress(a.address))) {
+  if (!(await publicHost(u))) {
     throw new OAuthError("invalid_client", "Client metadata host is not publicly reachable.");
   }
   const r = await fetch(url, {

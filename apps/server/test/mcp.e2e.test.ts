@@ -424,11 +424,127 @@ test("mcp: folder restrictions hide other folders", { skip }, async () => {
   await client.close();
 });
 
+test("unsubscribe: one-click, email (with approval) and web-page lists", { skip }, async () => {
+  const tag = randomUUID().slice(0, 6);
+  const unsubSubject = `unsub-${tag}`;
+  const lists = {
+    email: {
+      subject: `Weekly digest ${tag}`,
+      header: `<mailto:${ALICE.user}?subject=${unsubSubject}>`,
+    },
+    oneClick: {
+      subject: `Deals ${tag}`,
+      header: "<https://127.0.0.1/u/abc>, <mailto:nobody@example.test>",
+    },
+    web: { subject: `Offers ${tag}`, header: "<http://unsubscribe.example.test/u?id=1>" },
+  };
+  const c = await imapFor(BOB);
+  for (const [kind, l] of Object.entries(lists)) {
+    const raw = await new MailComposer({
+      from: `News <news@example.test>`,
+      to: BOB.user,
+      subject: l.subject,
+      text: "Newsletter body",
+      headers: {
+        "List-Unsubscribe": l.header,
+        ...(kind === "oneClick" ? { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : {}),
+      },
+    })
+      .compile()
+      .build();
+    await c.append("INBOX", raw, []);
+  }
+  await c.logout();
+  c.close();
+  await syncNow(accountId);
+  const idOf = async (subject: string) => {
+    const r = await api("GET", `/mail/search?q=${encodeURIComponent(`subject:"${subject}"`)}`);
+    assert.equal(r.messages.length, 1, `found ${subject}`);
+    return r.messages[0].id as number;
+  };
+  const ids = {
+    email: await idOf(lists.email.subject),
+    oneClick: await idOf(lists.oneClick.subject),
+    web: await idOf(lists.web.subject),
+  };
+
+  // Message details say how to unsubscribe.
+  const detail = async (id: number) => (await api("GET", `/mail/messages/${id}`)).message;
+  assert.deepEqual((await detail(ids.email)).unsubscribe, {
+    method: "email",
+    website: null,
+    unsubscribedAt: null,
+  });
+  assert.equal((await detail(ids.oneClick)).unsubscribe.method, "one_click");
+  const [first] = (await api("GET", `/mail/search?q=${encodeURIComponent("Project update")}`))
+    .messages;
+  assert.equal((await detail(first.id)).unsubscribe, null, "ordinary mail has none");
+
+  // Web page only: hand the link to a person.
+  const web = await api("POST", `/mail/messages/${ids.web}/unsubscribe`);
+  assert.deepEqual(
+    [web.status, web.url],
+    ["open_website", "http://unsubscribe.example.test/u?id=1"],
+  );
+
+  // One-click never reaches private addresses.
+  await assert.rejects(
+    api("POST", `/mail/messages/${ids.oneClick}/unsubscribe`),
+    /502.*private or unknown host/,
+  );
+
+  // Agents need the unsubscribe permission; email unsubscribes also follow the send policy.
+  await api("PUT", `/agents/${agentId}/grants/${accountId}`, {
+    scopes: ["mail:read"],
+    sendPolicy: "deny",
+  });
+  let client = await mcp();
+  assert.ok(
+    !(await client.listTools()).tools.some((t) => t.name === "unsubscribe"),
+    "no unsubscribe tool without the permission",
+  );
+  await client.close();
+  await api("PUT", `/agents/${agentId}/grants/${accountId}`, {
+    scopes: ["mail:read", "mail:unsubscribe"],
+    sendPolicy: "deny",
+  });
+  client = await mcp();
+  const noSend = await call(client, "unsubscribe", { id: ids.email });
+  assert.ok(noSend.isError && /permission to send/.test(noSend.text), noSend.text);
+  await client.close();
+
+  await api("PUT", `/agents/${agentId}/grants/${accountId}`, {
+    scopes: ["mail:read", "mail:unsubscribe", "mail:send"],
+    sendPolicy: "approve",
+    recipientAllow: ["example.test"],
+  });
+  client = await mcp();
+  const queued = await call(client, "unsubscribe", { id: ids.email });
+  assert.equal(queued.data.status, "pending_approval", queued.text);
+  const { approvals } = await api("GET", "/approvals");
+  const p = approvals.find((a: { id: string }) => a.id === queued.data.pendingId);
+  assert.deepEqual([p.kind, p.payload.to], ["unsubscribe", ALICE.user]);
+  const decided = await api("POST", `/approvals/${queued.data.pendingId}/approve`);
+  assert.equal(decided.status, "executed");
+  assert.equal(decided.result.status, "unsubscribed");
+  await client.close();
+
+  const alice = await imapFor(ALICE);
+  const lock = await alice.getMailboxLock("INBOX");
+  const hits = (await alice.search({ subject: unsubSubject }, { uid: true })) || [];
+  lock.release();
+  await alice.logout();
+  alice.close();
+  assert.equal(hits.length, 1, "unsubscribe email delivered to the list address");
+  assert.ok((await detail(ids.email)).unsubscribe.unsubscribedAt, "remembered as unsubscribed");
+});
+
 test("audit log records agent activity, including denials", { skip }, async () => {
   const { entries } = await api("GET", "/audit?limit=200");
   const actions = entries.map((e: { action: string }) => e.action);
   assert.ok(actions.includes("mcp.get_message"));
   assert.ok(actions.includes("mail.send"), "the approved send was logged");
+  assert.ok(actions.includes("mail.unsubscribe"), "unsubscribes are logged");
   assert.ok(
     entries.some((e: { allowed: boolean }) => e.allowed === false),
     "denied attempts logged",

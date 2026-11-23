@@ -94,6 +94,11 @@ export async function mailRoutes(app: FastifyInstance, d: AppDeps) {
     return d.mail.delete(await access(req), b.ids, b);
   });
 
+  app.post("/api/v1/mail/messages/:id/unsubscribe", { preHandler: writer }, async (req) => {
+    const { id } = Id.parse(req.params);
+    return d.mail.unsubscribe(await access(req), id);
+  });
+
   app.post("/api/v1/mail/send", { preHandler: writer }, async (req) => {
     const b = Compose.extend({ accountId: z.uuid() }).parse(req.body);
     return d.mail.send(await access(req), b.accountId, toCompose(b));

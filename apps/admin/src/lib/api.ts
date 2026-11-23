@@ -148,6 +148,12 @@ export interface MessageDetail extends MessageSummary {
   messageIdHeader: string | null;
   text: string | null;
   html: string | null;
+  /** Mailing-list unsubscribe option (null: not from a list). */
+  unsubscribe: {
+    method: "one_click" | "email" | "website";
+    website: string | null;
+    unsubscribedAt: string | null;
+  } | null;
   attachments: Array<{
     id: number;
     filename: string | null;
@@ -156,6 +162,11 @@ export interface MessageDetail extends MessageSummary {
     inline: boolean;
   }>;
 }
+
+export type UnsubscribeOutcome =
+  | { status: "unsubscribed"; method: "one_click" | "email"; note: string }
+  | { status: "open_website"; method: "website"; url: string; note: string }
+  | { status: "pending_approval"; pendingId: string; note: string };
 
 export interface MailFolder {
   id: number;

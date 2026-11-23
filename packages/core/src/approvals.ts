@@ -90,6 +90,8 @@ export class ApprovalService {
         result = await this.mail.forward(access, payload.messageId, payload.input, {
           approved: true,
         });
+      else if (p.kind === "unsubscribe")
+        result = await this.mail.unsubscribe(access, payload.messageId, { approved: true });
       else throw new MailError(`Unknown action kind: ${p.kind}`);
       await this.db
         .update(pendingActions)

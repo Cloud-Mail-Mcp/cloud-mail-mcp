@@ -37,6 +37,13 @@ import {
 } from "./policy";
 import type { Scope } from "./scopes";
 import type { Services } from "./services";
+import {
+  oneClickUnsubscribe,
+  parseUnsubscribe,
+  type UnsubscribeInfo,
+  type UnsubscribeMethod,
+  unsubscribeMethod,
+} from "./unsubscribe";
 
 export class MailError extends Error {
   constructor(
@@ -71,6 +78,14 @@ export interface MessageDetail extends MessageSummary {
   messageIdHeader: string | null;
   text: string | null;
   html: string | null;
+  /** How to unsubscribe from the list this came from (null: not a mailing list). */
+  unsubscribe: {
+    method: UnsubscribeMethod;
+    /** The sender's unsubscribe web page, when there is one. Untrusted. */
+    website: string | null;
+    /** When it was unsubscribed through MailMCP. */
+    unsubscribedAt: string | null;
+  } | null;
   attachments: Array<{
     id: number;
     filename: string | null;
@@ -89,6 +104,17 @@ export interface ComposeInput {
   html?: string;
   attachments?: Array<{ filename: string; contentType?: string; content: Buffer }>;
 }
+
+export type UnsubscribeOutcome =
+  | { status: "unsubscribed"; method: "one_click" | "email"; note: string }
+  | { status: "open_website"; method: "website"; url: string; note: string }
+  | { status: "pending_approval"; pendingId: string; note: string };
+
+type HeadersExtra = {
+  references?: string[];
+  unsubscribe?: UnsubscribeInfo | null;
+  unsubscribedAt?: string;
+} | null;
 
 export type SendOutcome =
   | { status: "sent"; messageId: string; accepted: string[]; rejected: string[] }
@@ -433,6 +459,8 @@ export class MailService {
         .where(and(eq(messages.accountId, accountId), eq(messages.id, id)));
     }
     const body = await this.s.sync.bodies.load(row, m!.bodyBlobKey);
+    const unsub = await this.unsubscribeInfo(row, m!);
+    const method = unsubscribeMethod(unsub);
     const [summary] = await this.hydrate([{ accountId, messageId: id }]);
     const people = (await this.db.execute(sql`
       SELECT ma.role, ad.name, ad.email FROM message_addresses ma JOIN addresses ad ON ad.id = ma.address_id
@@ -461,6 +489,13 @@ export class MailService {
       messageIdHeader: m!.messageIdHdr,
       text: body?.text ?? null,
       html: body?.html ?? null,
+      unsubscribe: method
+        ? {
+            method,
+            website: unsub?.web ?? null,
+            unsubscribedAt: (m!.headersExtra as HeadersExtra)?.unsubscribedAt ?? null,
+          }
+        : null,
       attachments: atts.map((a) => ({
         id: Number(a.id),
         filename: a.filename,
@@ -738,6 +773,146 @@ export class MailService {
       );
     }
     return { trashed, deleted };
+  }
+
+  // ───────────────────────────── unsubscribe ─────────────────────────────
+
+  /**
+   * The message's unsubscribe options. Bodies fetched before this feature existed don't have
+   * them stored yet, so read them from the raw message once and remember the answer.
+   */
+  private async unsubscribeInfo(
+    row: AccountRow,
+    m: typeof messages.$inferSelect,
+  ): Promise<UnsubscribeInfo | null> {
+    const extra = (m.headersExtra ?? {}) as NonNullable<HeadersExtra>;
+    if ("unsubscribe" in extra) return extra.unsubscribe ?? null;
+    if (m.bodyState !== "fetched" || !m.rawBlobKey) return null;
+    const raw = await this.s.sync.bodies.loadRaw(row, m.rawBlobKey).catch(() => null);
+    if (!raw) return null;
+    const info = parseUnsubscribe(raw);
+    await this.db
+      .update(messages)
+      .set({
+        headersExtra: sql`coalesce(${messages.headersExtra}, '{}'::jsonb) || ${JSON.stringify({ unsubscribe: info })}::jsonb`,
+      })
+      .where(and(eq(messages.accountId, m.accountId), eq(messages.id, m.id)));
+    return info;
+  }
+
+  /**
+   * Unsubscribe from the mailing list that sent `messageId`, using its List-Unsubscribe header:
+   * a one-click POST when the sender supports it, otherwise an unsubscribe email (which counts
+   * as sending, so the send policy applies), otherwise the sender's web page for a person to open.
+   */
+  async unsubscribe(
+    access: Access,
+    messageId: number,
+    opts: { approved?: boolean } = {},
+  ): Promise<UnsubscribeOutcome> {
+    const byAccount = await this.resolve(access, [messageId], "mail:unsubscribe");
+    const [accountId] = [...byAccount.keys()] as [string];
+    const row = await this.row(accountId);
+    let [m] = await this.db
+      .select()
+      .from(messages)
+      .where(and(eq(messages.accountId, accountId), eq(messages.id, messageId)));
+    if (m && m.bodyState !== "fetched") {
+      await this.s.pool
+        .use(accountId, (c) => this.s.sync.bodies.fetch(row, c, messageId))
+        .catch((e: Error) => {
+          throw new MailError(`Couldn't download this message from the server: ${e.message}`, 502);
+        });
+      [m] = await this.db
+        .select()
+        .from(messages)
+        .where(and(eq(messages.accountId, accountId), eq(messages.id, messageId)));
+    }
+    if (!m) throw new MailError("Message not found", 404);
+    const info = await this.unsubscribeInfo(row, m);
+    const method = unsubscribeMethod(info);
+    if (!info || !method)
+      throw new MailError("This message has no unsubscribe option (no List-Unsubscribe header).");
+
+    const done = async (how: "one_click" | "email", target: string) => {
+      await this.db
+        .update(messages)
+        .set({
+          headersExtra: sql`coalesce(${messages.headersExtra}, '{}'::jsonb) || ${JSON.stringify({ unsubscribedAt: new Date().toISOString() })}::jsonb`,
+        })
+        .where(and(eq(messages.accountId, accountId), eq(messages.id, messageId)));
+      await this.log(access, "mail.unsubscribe", accountId, target, true, {
+        messageId,
+        method: how,
+      });
+    };
+
+    if (method === "one_click") {
+      const link = info.oneClick as string;
+      try {
+        await oneClickUnsubscribe(link);
+      } catch (e) {
+        await this.log(access, "mail.unsubscribe", accountId, new URL(link).host, false, {
+          messageId,
+          method,
+          error: (e as Error).message,
+        });
+        throw new MailError(
+          `${(e as Error).message}${info.web && info.web !== link ? " You can try the sender's unsubscribe page instead." : ""}`,
+          502,
+        );
+      }
+      await done("one_click", new URL(link).host);
+      return {
+        status: "unsubscribed",
+        method,
+        note: "Unsubscribed. The sender may take a few days to stop sending.",
+      };
+    }
+
+    if (method === "email") {
+      const mt = info.mailto!;
+      if (!opts.approved) {
+        if (!access.grants.get(accountId)?.scopes.has("mail:send"))
+          throw new AccessDenied(
+            "This list only takes unsubscribe requests by email, which needs permission to send from this account. The user can unsubscribe from the MailMCP Mail page.",
+          );
+        const gated = await this.gateSend(
+          access,
+          accountId,
+          "unsubscribe",
+          { messageId, to: mt.to },
+          [mt.to],
+        );
+        if (gated?.status === "pending_approval") return gated;
+      }
+      const sent = await this.s.pool.use(accountId, async (c) =>
+        c.send({
+          from: await this.fromAddress(accountId),
+          to: [{ email: mt.to }],
+          subject: mt.subject || "unsubscribe",
+          text: mt.body || "unsubscribe",
+        }),
+      );
+      if (!sent.accepted.length && sent.rejected.length)
+        throw new MailError(`The mail server rejected the unsubscribe email to ${mt.to}.`, 502);
+      await done("email", mt.to);
+      return {
+        status: "unsubscribed",
+        method,
+        note: `Sent an unsubscribe email to ${mt.to}. The sender may take a few days to stop sending.`,
+      };
+    }
+
+    await this.log(access, "mail.unsubscribe.website", accountId, new URL(info.web!).host, true, {
+      messageId,
+    });
+    return {
+      status: "open_website",
+      method,
+      url: info.web!,
+      note: "This sender only offers an unsubscribe web page. A person needs to open it in a browser to finish.",
+    };
   }
 
   // ───────────────────────────── sending ─────────────────────────────

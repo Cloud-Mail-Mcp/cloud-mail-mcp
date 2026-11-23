@@ -44,6 +44,13 @@ function Preview({ p }: { p: PendingAction }) {
       </dl>
     );
   }
+  if (p.kind === "unsubscribe")
+    return (
+      <p className="text-sm">
+        Send an unsubscribe email to <span className="font-medium">{p.payload.to}</span> for the
+        mailing list that sent message #{p.payload.messageId}
+      </p>
+    );
   return (
     <div className="space-y-2 text-sm">
       <p>

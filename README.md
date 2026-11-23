@@ -106,9 +106,9 @@ Or, for clients that only run local servers (`claude_desktop_config.json` style)
 
 ### Tools agents get (filtered by their permissions)
 
-| Read                                                                                                               | Organize                                            | Send                                                                   | Folders                                           |
-| ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
-| `list_accounts`, `list_folders`, `list_messages`, `search_messages`, `get_message`, `get_thread`, `get_attachment` | `mark_messages`, `move_messages`, `delete_messages` | `send_email`, `reply`, `forward`, `create_draft`, `get_pending_action` | `create_folder`, `rename_folder`, `delete_folder` |
+| Read                                                                                                               | Organize                                                           | Send                                                                   | Folders                                           |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------- |
+| `list_accounts`, `list_folders`, `list_messages`, `search_messages`, `get_message`, `get_thread`, `get_attachment` | `mark_messages`, `move_messages`, `delete_messages`, `unsubscribe` | `send_email`, `reply`, `forward`, `create_draft`, `get_pending_action` | `create_folder`, `rename_folder`, `delete_folder` |
 
 Search syntax: free text plus `from:` `to:` `subject:"…"` `in:<folder>` `after:YYYY-MM-DD` `before:` `has:attachment` `is:unread` `is:flagged`.
 Prompts: `triage_inbox`, `summarize_thread`, `draft_reply`.

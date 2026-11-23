@@ -265,6 +265,7 @@ Default is **deny**: an agent sees nothing until it has a **grant** on an accoun
 | `mail:draft`            | create/update/delete drafts                               |
 | `mail:send`             | send, reply, forward (subject to `send_policy`)           |
 | `mail:organize`         | move, mark read/unread/flagged, label                     |
+| `mail:unsubscribe`      | leave mailing lists via the sender's List-Unsubscribe     |
 | `mail:delete`           | move to trash                                             |
 | `mail:delete:permanent` | expunge (separate scope on purpose)                       |
 | `folders:manage`        | create/rename/delete folders                              |
@@ -292,15 +293,16 @@ Default is **deny**: an agent sees nothing until it has a **grant** on an accoun
 
 ### v0.1 tool set (≈20)
 
-| Group    | Tools                                                                             |
-| -------- | --------------------------------------------------------------------------------- |
-| Discover | `list_accounts`, `list_folders`, `get_account_instructions`                       |
-| Read     | `search_messages`, `list_messages`, `get_message`, `get_thread`, `get_attachment` |
-| Compose  | `create_draft`, `update_draft`, `send_draft`, `send_message`, `reply`, `forward`  |
-| Organize | `move_messages`, `mark_messages`, `label_messages`                                |
-| Delete   | `delete_messages` (trash; `permanent: true` needs the extra scope)                |
-| Folders  | `create_folder`, `rename_folder`, `delete_folder`                                 |
-| Status   | `get_pending_action` (agent checks whether a held send was approved)              |
+| Group    | Tools                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| Discover | `list_accounts`, `list_folders`, `get_account_instructions`                                     |
+| Read     | `search_messages`, `list_messages`, `get_message`, `get_thread`, `get_attachment`               |
+| Compose  | `create_draft`, `update_draft`, `send_draft`, `send_message`, `reply`, `forward`                |
+| Organize | `move_messages`, `mark_messages`, `label_messages`                                              |
+| Delete   | `delete_messages` (trash; `permanent: true` needs the extra scope)                              |
+| Lists    | `unsubscribe` (one-click POST, else unsubscribe email under the send policy, else the web link) |
+| Folders  | `create_folder`, `rename_folder`, `delete_folder`                                               |
+| Status   | `get_pending_action` (agent checks whether a held send was approved)                            |
 
 - **Resources:** `mailmcp://accounts`, `mailmcp://account/{id}/unread`.
 - **Prompts:** `triage_inbox`, `summarize_thread`, `draft_reply`.
