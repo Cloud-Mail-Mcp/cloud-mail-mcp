@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Alert,
@@ -123,6 +123,83 @@ export function KeyReveal({ apiKey, onDone }: { apiKey: string; onDone?: () => v
 
 // ───────────────────────────── List ─────────────────────────────
 
+/** The easy path: paste one URL into the AI app and approve on MailMCP's sign-in page. */
+function ConnectAppCard() {
+  const url = useMcpUrl();
+  const [open, setOpen] = useState<string | null>(null);
+  const steps: Array<[string, ReactNode]> = [
+    [
+      "Claude (claude.ai, Desktop, mobile)",
+      <>
+        Settings → <b>Connectors</b> → <b>Add custom connector</b>. Name it “MailMCP”, paste the
+        URL, click <b>Add</b>, then <b>Connect</b>. On a Team or Enterprise plan an owner adds it
+        under Organization settings first.
+      </>,
+    ],
+    [
+      "ChatGPT",
+      <>
+        Settings → <b>Apps &amp; Connectors</b> → <b>Advanced settings</b> → turn on{" "}
+        <b>Developer mode</b>. Then <b>Create</b> (or <b>Add connector</b>), paste the URL, choose{" "}
+        <b>OAuth</b> authentication, and connect. Menu names vary by plan.
+      </>,
+    ],
+    [
+      "Claude Code",
+      <>
+        Run{" "}
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
+          claude mcp add --transport http mailmcp {url}
+        </code>
+        , then type <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">/mcp</code> in
+        Claude Code and choose <b>Authenticate</b>.
+      </>,
+    ],
+    [
+      "Cursor, VS Code and others",
+      <>
+        Add a remote (HTTP) MCP server with this URL. Clients that support MCP sign-in open this
+        server's approval page automatically. For clients that don't, create an agent with an API
+        key below.
+      </>,
+    ],
+  ];
+  return (
+    <Card title="Connect an AI app" className="mb-6">
+      <div className="space-y-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Paste this URL into your AI app. You'll be sent here to sign in and choose which mailboxes
+          it can use. It then shows up in the list below.
+        </p>
+        <CopyBlock label="MCP server URL" text={url} />
+        {!url.startsWith("https://") && (
+          <Alert tone="warning" title="Claude and ChatGPT need an https:// address">
+            Set your public https URL in Settings → Server, or put MailMCP behind HTTPS.
+          </Alert>
+        )}
+        <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          {steps.map(([name, body]) => (
+            <li key={name}>
+              <button
+                type="button"
+                onClick={() => setOpen(open === name ? null : name)}
+                aria-expanded={open === name}
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/50"
+              >
+                {name}
+                <span className="text-zinc-400">{open === name ? "−" : "+"}</span>
+              </button>
+              {open === name && (
+                <p className="px-3 pb-3 text-sm text-zinc-600 dark:text-zinc-400">{body}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Card>
+  );
+}
+
 export function AgentsPage() {
   const q = useQuery({
     queryKey: ["agents"],
@@ -166,9 +243,16 @@ export function AgentsPage() {
     <>
       <PageHeader
         title="Agents"
-        description="AI assistants and apps that can use your mail through MCP. Each gets its own key and permissions."
-        actions={!creating && <Button onClick={() => setCreating(true)}>New agent</Button>}
+        description="AI assistants and apps that can use your mail through MCP, each with its own permissions."
+        actions={
+          !creating && (
+            <Button variant="secondary" onClick={() => setCreating(true)}>
+              New agent with API key
+            </Button>
+          )
+        }
       />
+      <ConnectAppCard />
       {creating && (
         <Card title="New agent" className="mb-6">
           <form
@@ -215,7 +299,7 @@ export function AgentsPage() {
           <div className="py-8 text-center">
             <p className="font-medium text-zinc-900 dark:text-zinc-100">No agents yet</p>
             <p className="mt-1 text-sm text-zinc-500">
-              Create one to connect Claude or your own AI app to your mail.
+              Connect an app with the URL above, or create an agent with an API key.
             </p>
           </div>
         </Card>
@@ -240,6 +324,11 @@ export function AgentsPage() {
                     >
                       {a.name}
                     </Link>
+                    {a.kind === "oauth" && (
+                      <span className="ml-2 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                        signed in
+                      </span>
+                    )}
                     {a.disabled && (
                       <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] uppercase text-zinc-500 dark:bg-zinc-800">
                         disabled
@@ -249,7 +338,8 @@ export function AgentsPage() {
                   </td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{a.accountCount}</td>
                   <td className="hidden px-4 py-3 font-mono text-xs text-zinc-500 sm:table-cell">
-                    {a.keys.map((k) => `${k.prefix}…`).join(", ") || "none"}
+                    {a.keys.map((k) => `${k.prefix}…`).join(", ") ||
+                      (a.kind === "oauth" ? "OAuth" : "none")}
                   </td>
                   <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
                     {relTime(a.lastUsedAt)}

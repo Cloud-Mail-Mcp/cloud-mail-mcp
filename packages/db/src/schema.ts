@@ -294,6 +294,10 @@ export const agents = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     disabled: boolean("disabled").notNull().default(false),
+    /** "api_key": created in the admin panel; "oauth": created by approving an app (Claude, ChatGPT…). */
+    kind: text("kind").notNull().default("api_key"),
+    /** For OAuth agents: the app's client_id (a URL for CIMD clients). */
+    oauthClientId: text("oauth_client_id"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
@@ -455,3 +459,68 @@ export const appSettings = pgTable("app_settings", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ───────────────────────────── OAuth (MCP authorization) ─────────────────────────────
+
+/**
+ * Apps allowed to start an OAuth sign-in: registered dynamically (RFC 7591) or described by a
+ * Client ID Metadata Document (the client_id is an https URL we fetched and verified).
+ */
+export const oauthClients = pgTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  kind: text("kind").notNull(), // "dcr" | "cimd"
+  clientName: text("client_name"),
+  clientUri: text("client_uri"),
+  redirectUris: text("redirect_uris").array().notNull(),
+  /** "none" (public, PKCE only), "client_secret_basic" or "client_secret_post". */
+  tokenAuthMethod: text("token_auth_method").notNull().default("none"),
+  secretHash: text("secret_hash"),
+  metadata: jsonb("metadata"),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** One-time authorization codes (PKCE-bound, short-lived). */
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id").notNull(),
+  agentId: uuid("agent_id")
+    .notNull()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  resource: text("resource"),
+  scope: text("scope"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+});
+
+/** Access + refresh token pairs. Refresh tokens rotate; a reused one revokes its family. */
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: id(),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    family: uuid("family").notNull(),
+    accessHash: text("access_hash").notNull(),
+    refreshHash: text("refresh_hash").notNull(),
+    resource: text("resource"),
+    scope: text("scope"),
+    accessExpiresAt: timestamp("access_expires_at", { withTimezone: true }).notNull(),
+    refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }).notNull(),
+    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("oauth_tokens_access_uq").on(t.accessHash),
+    uniqueIndex("oauth_tokens_refresh_uq").on(t.refreshHash),
+    index("oauth_tokens_agent_idx").on(t.agentId),
+    index("oauth_tokens_family_idx").on(t.family),
+  ],
+);

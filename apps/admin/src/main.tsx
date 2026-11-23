@@ -2,7 +2,7 @@ import "./styles.css";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Redirect, Route, Router, Switch } from "wouter";
+import { Redirect, Route, Router, Switch, useLocation } from "wouter";
 import { Shell } from "./components/Shell";
 import { Spinner } from "./components/ui";
 import { ApiError, api, type Me } from "./lib/api";
@@ -10,6 +10,7 @@ import { AccountDetailPage, AccountsPage, AddAccountPage } from "./pages/Account
 import { ApprovalsPage, AuditPage } from "./pages/Activity";
 import { AgentDetailPage, AgentsPage, PermissionsPage } from "./pages/Agents";
 import { LoginPage } from "./pages/Auth";
+import { ConnectPage } from "./pages/Connect";
 import { MailPage } from "./pages/Mail";
 import { SettingsPage } from "./pages/Settings";
 import { SetupWizard } from "./pages/Setup";
@@ -24,6 +25,7 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  const [location] = useLocation();
   const setup = useQuery({
     queryKey: ["setup"],
     queryFn: () => api<{ needsSetup: boolean; hasUsers: boolean }>("/setup/status"),
@@ -42,6 +44,8 @@ function App() {
   if (me.isError || !me.data) return <LoginPage />;
   // Owner exists but setup isn't finished: continue the wizard.
   if (setup.data?.needsSetup) return <SetupWizard key="settings" hasUsers />;
+  // An AI app is asking to connect (OAuth): full-page consent, no admin chrome.
+  if (location === "/connect") return <ConnectPage />;
 
   return (
     <Shell me={me.data.user}>

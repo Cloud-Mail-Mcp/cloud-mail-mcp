@@ -9,6 +9,7 @@ export * from "./jobs";
 export * from "./logger";
 export * from "./mail";
 export * from "./masterkey";
+export * from "./oauth";
 export * from "./parse";
 export * from "./policy";
 export * from "./pool";

@@ -203,6 +203,8 @@ export interface AgentSummary {
   name: string;
   description: string | null;
   disabled: boolean;
+  /** "oauth" = connected by signing in from the AI app; "api_key" = created here with a key. */
+  kind: "api_key" | "oauth";
   createdAt: string;
   keys: ApiKeyInfo[];
   accountCount: number;

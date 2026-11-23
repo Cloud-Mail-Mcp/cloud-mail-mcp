@@ -9,6 +9,8 @@ import {
   grants,
   inArray,
   isNull,
+  max,
+  oauthTokens,
 } from "@mailmcp/db";
 import { audit } from "./audit";
 import { MailError } from "./mail";
@@ -58,16 +60,22 @@ export class AgentService {
       .select({ agentId: grants.agentId, accountId: grants.accountId })
       .from(grants)
       .where(inArray(grants.agentId, ids));
+    const tokenUse = await this.db
+      .select({ agentId: oauthTokens.agentId, lastUsedAt: max(oauthTokens.lastUsedAt) })
+      .from(oauthTokens)
+      .where(inArray(oauthTokens.agentId, ids))
+      .groupBy(oauthTokens.agentId);
     return rows.map((a) => ({
       ...a,
       keys: keys.filter((k) => k.agentId === a.id),
       accountCount: g.filter((x) => x.agentId === a.id).length,
       lastUsedAt:
-        keys
-          .filter((k) => k.agentId === a.id)
-          .map((k) => k.lastUsedAt)
-          .filter(Boolean)
-          .sort()
+        [
+          ...keys.filter((k) => k.agentId === a.id).map((k) => k.lastUsedAt),
+          tokenUse.find((t) => t.agentId === a.id)?.lastUsedAt,
+        ]
+          .filter((d): d is Date => !!d)
+          .sort((x, y) => x.getTime() - y.getTime())
           .at(-1) ?? null,
     }));
   }

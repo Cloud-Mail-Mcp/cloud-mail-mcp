@@ -1,4 +1,5 @@
 import {
+  ACCESS_PREFIX,
   type Access,
   AccessDenied,
   AccountError,
@@ -6,6 +7,7 @@ import {
   audit,
   MailError,
   type MessageDetail,
+  OAUTH_SCOPE,
   type Scope,
 } from "@mailmcp/core";
 import { parseSort } from "@mailmcp/search";
@@ -15,6 +17,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "./app";
+import { baseUrl, resourceMetadataUrl } from "./routes/oauth";
 import { AddressList, Attachment, IdList, toCompose } from "./schemas";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -546,16 +549,30 @@ export function buildMcpServer(access: Access, d: AppDeps) {
   return server;
 }
 
-/** Streamable HTTP endpoint at /mcp, authenticated by an agent API key (Bearer). */
+/**
+ * Streamable HTTP endpoint at /mcp. Accepts an OAuth access token (apps connected through the
+ * sign-in flow) or an agent API key. Without one, the 401 points clients at OAuth discovery.
+ */
 export async function mcpRoutes(app: FastifyInstance, d: AppDeps) {
   app.post("/mcp", async (req, reply) => {
     const header = req.headers.authorization ?? "";
     const key = header.replace(/^Bearer\s+/i, "").trim();
-    const access = key ? await d.policy.forApiKey(key) : null;
+    const base = await baseUrl(d, req);
+    const access = !key
+      ? null
+      : key.startsWith(ACCESS_PREFIX)
+        ? await d.oauth.accessForToken(key, `${base}/mcp`)
+        : await d.policy.forApiKey(key);
     if (!access) {
-      reply.header("www-authenticate", 'Bearer realm="mailmcp"');
+      const invalid = key ? ', error="invalid_token"' : "";
+      reply.header(
+        "www-authenticate",
+        `Bearer resource_metadata="${resourceMetadataUrl(base)}", scope="${OAUTH_SCOPE}"${invalid}`,
+      );
       return reply.code(401).send({
-        error: "Missing or invalid API key. Create one in the MailMCP admin panel → Agents.",
+        error: key
+          ? "This token or API key is invalid, expired or revoked. Reconnect the app."
+          : "Sign in required. Add this URL as a connector in your AI app, or use an API key from MailMCP → Agents.",
       });
     }
     const server = buildMcpServer(access, d);

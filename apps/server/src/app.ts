@@ -9,6 +9,7 @@ import {
   createServices,
   MailError,
   MailService,
+  OAuthService,
   PolicyService,
   type Services,
 } from "@mailmcp/core";
@@ -25,6 +26,7 @@ import { approvalRoutes } from "./routes/approvals";
 import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { mailRoutes } from "./routes/mail";
+import { CORS_PATHS, oauthRoutes } from "./routes/oauth";
 import { settingsRoutes } from "./routes/settings";
 import { systemRoutes } from "./routes/system";
 
@@ -37,6 +39,7 @@ export interface AppDeps extends Services {
   mail: MailService;
   agents: AgentService;
   approvals: ApprovalService;
+  oauth: OAuthService;
   masterKeyInfo: { source: "env" | "file" | "generated"; path?: string };
 }
 
@@ -62,12 +65,14 @@ export async function buildApp(opts: {
   });
   const policy = new PolicyService(opts.db);
   const mail = new MailService(services, policy);
+  const agentsSvc = new AgentService(opts.db);
   const deps: AppDeps = {
     ...services,
     config: opts.config,
     policy,
     mail,
-    agents: new AgentService(opts.db),
+    agents: agentsSvc,
+    oauth: new OAuthService(opts.db, policy, agentsSvc),
     approvals: new ApprovalService(opts.db, mail, policy),
     masterKeyInfo: opts.masterKeyInfo,
   };
@@ -84,6 +89,33 @@ export async function buildApp(opts: {
       const err = new Error("Request body is not valid JSON") as Error & { statusCode: number };
       err.statusCode = 400;
       done(err, undefined);
+    }
+  });
+
+  // OAuth token/registration/revocation requests are form-encoded (RFC 6749).
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string", bodyLimit: 64 * 1024 },
+    (_req, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))),
+  );
+
+  // MCP clients that run in a browser call discovery, OAuth and /mcp cross-origin. These answer
+  // to bearer tokens only (never cookies), so any origin may call them.
+  app.addHook("onRequest", async (req, reply) => {
+    const path = req.url.split("?")[0] ?? "";
+    if (!CORS_PATHS.some((re) => re.test(path))) return;
+    reply.header("access-control-allow-origin", "*");
+    reply.header("access-control-expose-headers", "www-authenticate, mcp-session-id");
+    if (req.method === "OPTIONS") {
+      return reply
+        .code(204)
+        .header("access-control-allow-methods", "GET, POST, DELETE, OPTIONS")
+        .header(
+          "access-control-allow-headers",
+          "authorization, content-type, mcp-protocol-version, mcp-session-id, last-event-id",
+        )
+        .header("access-control-max-age", "86400")
+        .send();
     }
   });
 
@@ -122,6 +154,7 @@ export async function buildApp(opts: {
   await app.register(async (r) => agentRoutes(r, deps));
   await app.register(async (r) => approvalRoutes(r, deps));
   await app.register(async (r) => auditRoutes(r, deps));
+  await app.register(async (r) => oauthRoutes(r, deps));
   await app.register(async (r) => mcpRoutes(r, deps));
 
   // Serve the built admin panel at /admin (in dev, Vite serves it on :5173 instead).
