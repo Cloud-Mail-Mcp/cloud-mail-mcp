@@ -10,6 +10,7 @@ import { AccountDetailPage, AccountsPage, AddAccountPage } from "./pages/Account
 import { ApprovalsPage, AuditPage } from "./pages/Activity";
 import { AgentDetailPage, AgentsPage, PermissionsPage } from "./pages/Agents";
 import { LoginPage } from "./pages/Auth";
+import { ChatPage } from "./pages/Chat";
 import { ConnectPage } from "./pages/Connect";
 import { MailPage } from "./pages/Mail";
 import { SettingsPage } from "./pages/Settings";
@@ -55,6 +56,7 @@ function App() {
         <Route path="/accounts/:id">{(p) => <AccountDetailPage key={p.id} id={p.id} />}</Route>
         <Route path="/settings" component={SettingsPage} />
         <Route path="/mail" component={MailPage} />
+        <Route path="/chat" component={ChatPage} />
         <Route path="/agents" component={AgentsPage} />
         <Route path="/agents/:id">{(p) => <AgentDetailPage key={p.id} id={p.id} />}</Route>
         <Route path="/permissions" component={PermissionsPage} />

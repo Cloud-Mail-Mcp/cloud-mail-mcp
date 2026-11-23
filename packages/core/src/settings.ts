@@ -46,6 +46,19 @@ export const settingDefs = {
     }),
     secretFields: ["webhookUrl", "webhookAuth"],
   },
+  /**
+   * In-app chat with Claude, using an Anthropic API key (off until a key is saved). The chat acts
+   * as one of your agents, with exactly that agent's mailbox permissions.
+   */
+  assistant: {
+    schema: z.object({
+      apiKey: z.string().trim().max(500).default(""),
+      model: z
+        .enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"])
+        .default("claude-opus-5-5"),
+    }),
+    secretFields: ["apiKey"],
+  },
   /** First-run wizard state. The wizard shows until `completedAt` is set. */
   setup: {
     schema: z.object({ completedAt: z.string().nullable().default(null) }),

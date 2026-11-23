@@ -350,6 +350,79 @@ export function GeneralCard({ onSaved, saveLabel = "Save" }: CardProps = {}) {
   );
 }
 
+/** In-app chat with Claude: bring your own Anthropic API key. */
+export function AssistantCard() {
+  const qc = useQueryClient();
+  const s = useSetting("assistant", () => qc.invalidateQueries({ queryKey: ["chat-status"] }));
+  if (s.q.isLoading) return <Spinner />;
+  const keySaved = s.q.data?.secretsSet.apiKey;
+  return (
+    <Card title="Assistant (chat with Claude)">
+      <div className="space-y-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Chat with Claude about your mail right here, under <b>Chat</b>. It uses your own Anthropic
+          API key (usage is billed to your Anthropic account) and acts as one of your agents, with
+          exactly that agent's permissions. Leave the key empty to keep chat off.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Anthropic API key"
+            htmlFor="akey"
+            hint={
+              keySaved ? (
+                "Saved. Leave blank to keep it."
+              ) : (
+                <>
+                  Create one at{" "}
+                  <a
+                    href="https://console.anthropic.com/settings/keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    console.anthropic.com
+                  </a>
+                  . Stored encrypted.
+                </>
+              )
+            }
+          >
+            <Input
+              id="akey"
+              type="password"
+              autoComplete="off"
+              placeholder={keySaved ? "••••••••" : "sk-ant-…"}
+              value={(getPath(s.draft, "apiKey") as string) ?? ""}
+              onChange={(e) => s.set("apiKey", e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Model"
+            htmlFor="amodel"
+            hint="Opus is the most capable; Haiku is fastest and cheapest."
+          >
+            <select
+              id="amodel"
+              value={(getPath(s.draft, "model") as string) ?? "claude-opus-5-5"}
+              onChange={(e) => s.set("model", e.target.value)}
+              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            >
+              <option value="claude-opus-5-5">Claude Opus 5.5</option>
+              <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+              <option value="claude-haiku-5-5">Claude Haiku 5.5</option>
+            </select>
+          </Field>
+        </div>
+        {s.err && <Alert tone="error" title={s.err.message} />}
+        {s.saved && <Alert tone="success" title="Saved." />}
+        <Button busy={s.save.isPending} onClick={() => s.save.mutate()}>
+          Save
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   return (
     <>
@@ -357,6 +430,7 @@ export function SettingsPage() {
       <div className="space-y-6">
         <GeneralCard />
         <UpdatesCard />
+        <AssistantCard />
         <StorageCard />
         <SyncCard />
         <SystemCard />

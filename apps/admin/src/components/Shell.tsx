@@ -6,6 +6,7 @@ import { api, type Me } from "../lib/api";
 const nav: Array<{ href: string; label: string; soon?: boolean }> = [
   { href: "/accounts", label: "Accounts" },
   { href: "/mail", label: "Mail" },
+  { href: "/chat", label: "Chat" },
   { href: "/agents", label: "Agents" },
   { href: "/permissions", label: "Permissions" },
   { href: "/approvals", label: "Approvals" },

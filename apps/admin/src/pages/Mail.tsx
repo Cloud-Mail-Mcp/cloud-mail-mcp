@@ -177,10 +177,13 @@ function Reader({
   id,
   onClose,
   onChanged,
+  onRemove,
 }: {
   id: number;
   onClose: () => void;
   onChanged: () => void;
+  /** Delete or archive: the page hides the message and opens the next one right away. */
+  onRemove: (kind: "trash" | "archive") => void;
 }) {
   const qc = useQueryClient();
   const thread = useQuery({
@@ -204,16 +207,7 @@ function Reader({
   }, [id]);
 
   const act = useMutation({
-    mutationFn: async (a: {
-      kind: "read" | "unread" | "flag" | "unflag" | "archive" | "trash";
-    }) => {
-      if (a.kind === "archive")
-        return api("/mail/messages/move", {
-          method: "POST",
-          body: { ids: [id], folder: "archive" },
-        });
-      if (a.kind === "trash")
-        return api("/mail/messages/delete", { method: "POST", body: { ids: [id] } });
+    mutationFn: async (a: { kind: "read" | "unread" | "flag" | "unflag" }) => {
       const body =
         a.kind === "read" || a.kind === "unread"
           ? { read: a.kind === "read" }
@@ -221,10 +215,9 @@ function Reader({
       return api("/mail/messages/mark", { method: "POST", body: { ids: [id], ...body } });
     },
     onMutate: () => setErr(null),
-    onSuccess: async (_d, a) => {
+    onSuccess: async () => {
       onChanged();
-      if (a.kind === "archive" || a.kind === "trash") onClose();
-      else await qc.invalidateQueries({ queryKey: ["thread", id] });
+      await qc.invalidateQueries({ queryKey: ["thread", id] });
     },
     onError: (e) => setErr((e as Error).message),
   });
@@ -280,10 +273,15 @@ function Reader({
           >
             {current.flagged ? "Unflag" : "Flag"}
           </Button>
-          <Button variant="secondary" onClick={() => act.mutate({ kind: "archive" })}>
+          <Button variant="secondary" onClick={() => onRemove("archive")}>
             Archive
           </Button>
-          <Button variant="secondary" onClick={() => act.mutate({ kind: "trash" })}>
+          <Button
+            variant="secondary"
+            onClick={() => onRemove("trash")}
+            title="Delete (Delete key)"
+            aria-keyshortcuts="Delete"
+          >
             Delete
           </Button>
         </div>
@@ -373,8 +371,25 @@ export function MailPage() {
     }
   };
   const [sortField, sortOrder] = sort.split(":") as [string, string];
+  const [unreadOnly, setUnreadOnly] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("mailmcp.unreadOnly") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleUnread = () => {
+    const v = !unreadOnly;
+    setUnreadOnly(v);
+    setSelected(null);
+    try {
+      localStorage.setItem("mailmcp.unreadOnly", v ? "1" : "0");
+    } catch {
+      // storage unavailable: keep it for this visit only
+    }
+  };
 
-  const listKey = ["mail-list", view.accountId ?? "all", view.folder, query, sort];
+  const listKey = ["mail-list", view.accountId ?? "all", view.folder, query, sort, unreadOnly];
   const list = useInfiniteQuery({
     queryKey: listKey,
     initialPageParam: undefined as string | undefined,
@@ -386,23 +401,108 @@ export function MailPage() {
       p.set("sort", sortField);
       p.set("order", sortOrder);
       if (query) {
-        p.set("q", query);
+        p.set("q", unreadOnly ? `${query} is:unread` : query);
         return api<MessagePage>(`/mail/search?${p}`);
       }
       p.set("folder", view.folder);
+      if (unreadOnly) p.set("unread", "true");
       return api<MessagePage>(`/mail/messages?${p}`);
     },
     getNextPageParam: (last) => last.nextCursor,
   });
+  // Messages deleted/archived from here disappear at once; the server call runs behind.
+  const [removed, setRemoved] = useState<Set<number>>(new Set());
+  const [removeErr, setRemoveErr] = useState<string | null>(null);
   const rows: MessageSummary[] = useMemo(
-    () => list.data?.pages.flatMap((p) => p.messages) ?? [],
-    [list.data],
+    () => (list.data?.pages.flatMap((p) => p.messages) ?? []).filter((m) => !removed.has(m.id)),
+    [list.data, removed],
   );
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["mail-list"] });
     qc.invalidateQueries({ queryKey: ["mail-folders"] });
   };
+
+  /** Delete or archive a message and open the next one in the list (or the previous at the end). */
+  const removeMessage = async (id: number, kind: "trash" | "archive") => {
+    const i = rows.findIndex((r) => r.id === id);
+    const next = i >= 0 ? (rows[i + 1] ?? rows[i - 1] ?? null) : null;
+    setRemoveErr(null);
+    setRemoved((s) => new Set(s).add(id));
+    setSelected(next?.id ?? null);
+    try {
+      await (kind === "trash"
+        ? api("/mail/messages/delete", { method: "POST", body: { ids: [id] } })
+        : api("/mail/messages/move", { method: "POST", body: { ids: [id], folder: "archive" } }));
+      refresh();
+    } catch (e) {
+      setRemoved((s) => {
+        const n = new Set(s);
+        n.delete(id);
+        return n;
+      });
+      setRemoveErr(
+        `Couldn't ${kind === "trash" ? "delete" : "archive"} that message: ${(e as Error).message}`,
+      );
+    }
+  };
+
+  // Keyboard: Delete/Backspace deletes the open message, J/K move down/up the list.
+  const keyState = useRef({ selected, rows, removeMessage });
+  keyState.current = { selected, rows, removeMessage };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']"))
+        return;
+      const { selected: sel, rows: list, removeMessage: remove } = keyState.current;
+      if ((e.key === "Delete" || e.key === "Backspace") && sel != null) {
+        e.preventDefault();
+        void remove(sel, "trash");
+      } else if (e.key === "j" || e.key === "k") {
+        const i = sel == null ? -1 : list.findIndex((r) => r.id === sel);
+        const target = e.key === "j" ? list[i + 1] : list[Math.max(0, i - 1)];
+        if (target) {
+          e.preventDefault();
+          setSelected(target.id);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    if (selected != null)
+      document.getElementById(`msg-${selected}`)?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+
+  // Folder list: each account folds away. With many accounts, start folded except the open one.
+  const [expanded, setExpanded] = useState<Set<string> | null>(() => {
+    try {
+      const v = localStorage.getItem("mailmcp.expanded");
+      return v ? new Set(JSON.parse(v) as string[]) : null;
+    } catch {
+      return null;
+    }
+  });
+  const accountList = accountsQ.data?.accounts ?? [];
+  const isOpen = (id: string) =>
+    expanded ? expanded.has(id) : accountList.length <= 3 || view.accountId === id;
+  const saveExpanded = (next: Set<string>) => {
+    setExpanded(next);
+    try {
+      localStorage.setItem("mailmcp.expanded", JSON.stringify([...next]));
+    } catch {
+      // storage unavailable: remember for this visit only
+    }
+  };
+  const toggleAccount = (id: string) => {
+    const next = new Set(accountList.filter((a) => isOpen(a.id)).map((a) => a.id));
+    next.has(id) ? next.delete(id) : next.add(id);
+    saveExpanded(next);
+  };
+  const allOpen = accountList.length > 0 && accountList.every((a) => isOpen(a.id));
 
   const byAccount = useMemo(() => {
     const m = new Map<string, MailFolder[]>();
@@ -422,6 +522,8 @@ export function MailPage() {
     .reduce((n, f) => n + f.unreadCount, 0);
 
   const pick = (v: View) => {
+    setRemoved(new Set());
+    setRemoveErr(null);
     setView(v);
     setQuery("");
     setSearch("");
@@ -460,37 +562,78 @@ export function MailPage() {
             <span className="text-xs tabular-nums">{totalUnread.toLocaleString()}</span>
           )}
         </button>
-        {(accountsQ.data?.accounts ?? []).map((a) => (
-          <div key={a.id} className="mt-4">
-            <p
-              className="truncate px-2.5 pb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400"
-              title={a.address}
+        {accountList.length > 1 && (
+          <div className="mt-3 flex justify-end px-1">
+            <button
+              type="button"
+              onClick={() => saveExpanded(new Set(allOpen ? [] : accountList.map((a) => a.id)))}
+              className="text-xs text-zinc-500 hover:text-zinc-800 hover:underline dark:hover:text-zinc-200"
             >
-              {a.displayName ?? a.address}
-            </p>
-            {(byAccount.get(a.id) ?? []).map((f) => (
+              {allOpen ? "Collapse all" : "Expand all"}
+            </button>
+          </div>
+        )}
+        {accountList.map((a) => {
+          const open = isOpen(a.id);
+          const folders = byAccount.get(a.id) ?? [];
+          const unread = folders
+            .filter((f) => f.role === "inbox")
+            .reduce((n, f) => n + f.unreadCount, 0);
+          return (
+            <div key={a.id} className="mt-2">
               <button
-                key={f.id}
                 type="button"
-                className={navItem(
-                  view.accountId === a.id && view.folder === String(f.id) && !query,
-                )}
-                onClick={() =>
-                  pick({
-                    accountId: a.id,
-                    folder: String(f.id),
-                    label: `${a.displayName ?? a.address} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
-                  })
-                }
+                onClick={() => toggleAccount(a.id)}
+                aria-expanded={open}
+                aria-controls={`folders-${a.id}`}
+                title={a.address}
+                className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
-                <span className="truncate">{f.role ? ROLE_LABEL[f.role] : f.path}</span>
-                {f.unreadCount > 0 && f.role !== "trash" && f.role !== "spam" && (
-                  <span className="text-xs tabular-nums">{f.unreadCount.toLocaleString()}</span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                  className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+                >
+                  <path d="M7.2 4.2a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06L8.26 15.8a.75.75 0 1 1-1.06-1.06L11.94 10 7.2 5.26a.75.75 0 0 1 0-1.06Z" />
+                </svg>
+                <span className="min-w-0 flex-1 truncate">{a.displayName ?? a.address}</span>
+                {!open && unread > 0 && (
+                  <span className="text-xs font-normal normal-case tabular-nums text-blue-600 dark:text-blue-400">
+                    {unread.toLocaleString()}
+                  </span>
                 )}
               </button>
-            ))}
-          </div>
-        ))}
+              {open && (
+                <div id={`folders-${a.id}`} className="mt-0.5">
+                  {folders.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className={navItem(
+                        view.accountId === a.id && view.folder === String(f.id) && !query,
+                      )}
+                      onClick={() =>
+                        pick({
+                          accountId: a.id,
+                          folder: String(f.id),
+                          label: `${a.displayName ?? a.address} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
+                        })
+                      }
+                    >
+                      <span className="truncate pl-4">{f.role ? ROLE_LABEL[f.role] : f.path}</span>
+                      {f.unreadCount > 0 && f.role !== "trash" && f.role !== "spam" && (
+                        <span className="text-xs tabular-nums">
+                          {f.unreadCount.toLocaleString()}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* List */}
@@ -519,6 +662,18 @@ export function MailPage() {
                 ? `Results for “${query}”${view.accountId ? ` in ${view.label.split(" · ")[0]}` : ""}`
                 : view.label}
             </p>
+            <button
+              type="button"
+              onClick={toggleUnread}
+              aria-pressed={unreadOnly}
+              className={`shrink-0 rounded border px-1.5 py-0.5 text-xs ${
+                unreadOnly
+                  ? "border-blue-600 bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                  : "border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              Unread only
+            </button>
             <label className="flex shrink-0 items-center gap-1 text-xs text-zinc-500">
               <span className="sr-only sm:not-sr-only">Sort</span>
               <select
@@ -536,6 +691,11 @@ export function MailPage() {
             </label>
           </div>
         </form>
+        {removeErr && (
+          <div className="border-b border-zinc-200 p-3 dark:border-zinc-800">
+            <Alert tone="error" title={removeErr} />
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           {list.isLoading ? (
             <Spinner />
@@ -547,12 +707,16 @@ export function MailPage() {
             </div>
           ) : rows.length === 0 ? (
             <p className="p-6 text-center text-sm text-zinc-500">
-              {query ? "No matches." : "No messages here yet. New accounts fill in as they sync."}
+              {query
+                ? "No matches."
+                : unreadOnly
+                  ? "No unread messages here."
+                  : "No messages here yet. New accounts fill in as they sync."}
             </p>
           ) : (
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {rows.map((m) => (
-                <li key={m.id}>
+                <li key={m.id} id={`msg-${m.id}`}>
                   <button
                     type="button"
                     onClick={() => setSelected(m.id)}
@@ -624,9 +788,20 @@ export function MailPage() {
         className={`min-w-0 flex-1 overflow-y-auto bg-zinc-50 p-4 sm:p-6 dark:bg-zinc-950 ${selected ? "block" : "hidden lg:block"}`}
       >
         {selected ? (
-          <Reader id={selected} onClose={() => setSelected(null)} onChanged={refresh} />
+          <Reader
+            id={selected}
+            onClose={() => setSelected(null)}
+            onChanged={refresh}
+            onRemove={(kind) => void removeMessage(selected, kind)}
+          />
         ) : (
-          <p className="mt-20 text-center text-sm text-zinc-500">Select a message to read it.</p>
+          <div className="mt-20 text-center text-sm text-zinc-500">
+            <p>Select a message to read it.</p>
+            <p className="mt-2 text-xs text-zinc-400">
+              Shortcuts: <kbd className="font-sans">J</kbd> / <kbd className="font-sans">K</kbd>{" "}
+              next and previous · <kbd className="font-sans">Delete</kbd> deletes and opens the next
+            </p>
+          </div>
         )}
       </section>
     </div>
