@@ -189,7 +189,7 @@ export function AddAccountForm({
   const [test, setTest] = useState<TestResult | null>(null);
   const [err, setErr] = useState<ApiError | null>(null);
 
-  const domain = email.includes("@") ? email.split("@")[1]!.toLowerCase() : "";
+  const domain = (email.split("@")[1] ?? "").toLowerCase();
   const detected = useMemo(
     () => module?.presets.find((p) => p.domains.includes(domain))?.id ?? (domain ? "cpanel" : null),
     [module, domain],
@@ -245,119 +245,113 @@ export function AddAccountForm({
   };
 
   return (
-    <>
-      <form onSubmit={submit} className="space-y-6">
-        <Card title="Mailbox">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Email address" htmlFor="email">
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value.trim())}
-                required
-                autoFocus
-              />
-            </Field>
-            <Field
-              label="Display name"
-              htmlFor="dn"
-              hint="Optional, e.g. “Work” or “Store support”."
-            >
-              <Input id="dn" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-            </Field>
-          </div>
-
-          <div className="mt-5">
-            <RadioGroup
-              name="provider"
-              label="Provider"
-              value={activePresetId ?? (presetPicked ? "other" : "")}
-              options={[
-                ...module.presets.map((p) => ({ value: p.id, label: p.name })),
-                { value: "other", label: "Other IMAP server" },
-              ]}
-              onChange={(v) => {
-                setPresetPicked(true);
-                if (v === "other") {
-                  setPresetId(null);
-                  setShowAdvanced(true);
-                } else {
-                  setPresetId(v);
-                  setAdvancedTouched(false);
-                }
-              }}
+    <form onSubmit={submit} className="space-y-6">
+      <Card title="Mailbox">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email address" htmlFor="email">
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value.trim())}
+              required
+              autoFocus
             />
-            {preset?.help && (
-              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{preset.help}</p>
-            )}
-          </div>
+          </Field>
+          <Field label="Display name" htmlFor="dn" hint="Optional, e.g. “Work” or “Store support”.">
+            <Input id="dn" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          </Field>
+        </div>
 
-          <div className="mt-5 max-w-sm">
-            <SchemaFields
-              module={module}
-              paths={module.ui.secretFields}
-              value={config}
-              onChange={(p, v) => setConfig((c) => setPath(c, p, v))}
-              errors={err?.fields}
-            />
-          </div>
-        </Card>
-
-        <Card
-          title="Server settings"
-          actions={
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setShowAdvanced((s) => !s)}
-              aria-expanded={showAdvanced}
-            >
-              {showAdvanced ? "Hide" : "Show"}
-            </Button>
-          }
-        >
-          {showAdvanced ? (
-            <SchemaFields
-              module={module}
-              paths={module.ui.advancedFields ?? []}
-              value={config}
-              onChange={onField}
-              errors={err?.fields}
-            />
-          ) : (
-            <p className="text-sm text-zinc-500">
-              {config.imap && (config.imap as Obj).host
-                ? `IMAP ${(config.imap as Obj).host}:${(config.imap as Obj).port} · SMTP ${(config.smtp as Obj).host}:${(config.smtp as Obj).port}`
-                : "Filled in automatically from the provider."}
-            </p>
+        <div className="mt-5">
+          <RadioGroup
+            name="provider"
+            label="Provider"
+            value={activePresetId ?? (presetPicked ? "other" : "")}
+            options={[
+              ...module.presets.map((p) => ({ value: p.id, label: p.name })),
+              { value: "other", label: "Other IMAP server" },
+            ]}
+            onChange={(v) => {
+              setPresetPicked(true);
+              if (v === "other") {
+                setPresetId(null);
+                setShowAdvanced(true);
+              } else {
+                setPresetId(v);
+                setAdvancedTouched(false);
+              }
+            }}
+          />
+          {preset?.help && (
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{preset.help}</p>
           )}
-        </Card>
+        </div>
 
-        {test && <TestOutcome result={test} />}
-        {err && (
-          <Alert tone="error" title={err.message}>
-            {err.hint}
-          </Alert>
-        )}
+        <div className="mt-5 max-w-sm">
+          <SchemaFields
+            module={module}
+            paths={module.ui.secretFields}
+            value={config}
+            onChange={(p, v) => setConfig((c) => setPath(c, p, v))}
+            errors={err?.fields}
+          />
+        </div>
+      </Card>
 
-        <div className="flex flex-wrap gap-2">
+      <Card
+        title="Server settings"
+        actions={
           <Button
             type="button"
-            variant="secondary"
-            busy={testM.isPending}
-            onClick={() => testM.mutate()}
-            disabled={!email || !config.password}
+            variant="ghost"
+            onClick={() => setShowAdvanced((s) => !s)}
+            aria-expanded={showAdvanced}
           >
-            Test connection
+            {showAdvanced ? "Hide" : "Show"}
           </Button>
-          <Button type="submit" busy={saveM.isPending} disabled={!email || !config.password}>
-            Save account
-          </Button>
-          {secondary}
-        </div>
-      </form>
-    </>
+        }
+      >
+        {showAdvanced ? (
+          <SchemaFields
+            module={module}
+            paths={module.ui.advancedFields ?? []}
+            value={config}
+            onChange={onField}
+            errors={err?.fields}
+          />
+        ) : (
+          <p className="text-sm text-zinc-500">
+            {config.imap && (config.imap as Obj).host
+              ? `IMAP ${(config.imap as Obj).host}:${(config.imap as Obj).port} · SMTP ${(config.smtp as Obj).host}:${(config.smtp as Obj).port}`
+              : "Filled in automatically from the provider."}
+          </p>
+        )}
+      </Card>
+
+      {test && <TestOutcome result={test} />}
+      {err && (
+        <Alert tone="error" title={err.message}>
+          {err.hint}
+        </Alert>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          busy={testM.isPending}
+          onClick={() => testM.mutate()}
+          disabled={!email || !config.password}
+        >
+          Test connection
+        </Button>
+        <Button type="submit" busy={saveM.isPending} disabled={!email || !config.password}>
+          Save account
+        </Button>
+        {secondary}
+      </div>
+    </form>
   );
 }
 

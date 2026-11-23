@@ -65,61 +65,59 @@ export function OwnerForm() {
   };
 
   return (
-    <>
-      <form onSubmit={submit} className="space-y-4">
-        {err && !err.fields && <Alert tone="error" title={err.message} />}
-        <Field label="Workspace name" htmlFor="org">
-          <Input id="org" value={f.orgName} onChange={set("orgName")} required />
-        </Field>
-        <Field label="Your name" htmlFor="name">
-          <Input id="name" value={f.name} onChange={set("name")} autoComplete="name" />
-        </Field>
-        <Field label="Email" htmlFor="email" error={err?.fields?.email}>
-          <Input
-            id="email"
-            type="email"
-            value={f.email}
-            onChange={set("email")}
-            autoComplete="email"
-            required
-          />
-        </Field>
-        <Field
-          label="Password"
-          htmlFor="pw"
-          hint="At least 10 characters."
-          error={err?.fields?.password}
-        >
-          <Input
-            id="pw"
-            type="password"
-            value={f.password}
-            onChange={set("password")}
-            autoComplete="new-password"
-            minLength={10}
-            required
-          />
-        </Field>
-        <Field
-          label="Confirm password"
-          htmlFor="pw2"
-          error={mismatch ? "Passwords don't match" : undefined}
-        >
-          <Input
-            id="pw2"
-            type="password"
-            value={f.confirm}
-            onChange={set("confirm")}
-            autoComplete="new-password"
-            invalid={mismatch}
-            required
-          />
-        </Field>
-        <Button type="submit" busy={busy} className="w-full">
-          Create account
-        </Button>
-      </form>
-    </>
+    <form onSubmit={submit} className="space-y-4">
+      {err && !err.fields && <Alert tone="error" title={err.message} />}
+      <Field label="Workspace name" htmlFor="org">
+        <Input id="org" value={f.orgName} onChange={set("orgName")} required />
+      </Field>
+      <Field label="Your name" htmlFor="name">
+        <Input id="name" value={f.name} onChange={set("name")} autoComplete="name" />
+      </Field>
+      <Field label="Email" htmlFor="email" error={err?.fields?.email}>
+        <Input
+          id="email"
+          type="email"
+          value={f.email}
+          onChange={set("email")}
+          autoComplete="email"
+          required
+        />
+      </Field>
+      <Field
+        label="Password"
+        htmlFor="pw"
+        hint="At least 10 characters."
+        error={err?.fields?.password}
+      >
+        <Input
+          id="pw"
+          type="password"
+          value={f.password}
+          onChange={set("password")}
+          autoComplete="new-password"
+          minLength={10}
+          required
+        />
+      </Field>
+      <Field
+        label="Confirm password"
+        htmlFor="pw2"
+        error={mismatch ? "Passwords don't match" : undefined}
+      >
+        <Input
+          id="pw2"
+          type="password"
+          value={f.confirm}
+          onChange={set("confirm")}
+          autoComplete="new-password"
+          invalid={mismatch}
+          required
+        />
+      </Field>
+      <Button type="submit" busy={busy} className="w-full">
+        Create account
+      </Button>
+    </form>
   );
 }
 

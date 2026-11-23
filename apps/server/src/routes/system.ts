@@ -47,11 +47,9 @@ export async function systemRoutes(
           signal: AbortSignal.timeout(20_000),
         }).catch((e: Error) => ({ ok: false, status: 0, statusText: e.message }) as const);
         if (!r.ok) {
-          return reply
-            .code(502)
-            .send({
-              error: `The redeploy webhook answered ${r.status || ""} ${r.statusText}`.trim(),
-            });
+          return reply.code(502).send({
+            error: `The redeploy webhook answered ${r.status || ""} ${r.statusText}`.trim(),
+          });
         }
         reply.code(202);
         return { requested: "webhook" };
