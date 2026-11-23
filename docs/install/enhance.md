@@ -30,16 +30,19 @@ In the website's **Databases** section, create a **PostgreSQL** database and a u
 
 ## 3. Run it as a Node.js app
 
-Open the website → **Advanced** → **Node.js** → **Deploy app**:
+Open the website → **Advanced** → **Node.js** → **Launch worker process**, choose the **Node.js** tab, and fill in:
 
-| Setting           | Value                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| Node.js version   | **22** (MailMCP needs 22.15 or newer)                                                      |
-| Working directory | `deploys/current`                                                                          |
-| Startup command   | `node server.mjs`                                                                          |
-| Port              | `8787` (any free port ≥ 1024 works; if you change it, use `node server.mjs --port <port>`) |
-| Proxy             | the whole website                                                                          |
-| Startup mode      | **Automatic** (Enhance restarts it if it stops)                                            |
+| Field                          | Value                                                   |
+| ------------------------------ | ------------------------------------------------------- |
+| Node.js version                | **24.x** (LTS, recommended). 22.15+ and 26.x also work. |
+| Startup command                | `node server.mjs --host 0.0.0.0 --port 3000`            |
+| Working directory              | `deploys/current`                                       |
+| HTTP Proxy                     | **On**                                                  |
+| Path                           | leave as `/` (the whole website)                        |
+| Port                           | `3000`. It must match `--port` in the startup command.  |
+| Allow web socket proxy upgrade | not needed (leave unchecked)                            |
+
+Click **Launch**. Enhance asks apps to listen on `0.0.0.0`, which is why the command includes `--host 0.0.0.0`; `npm start` alone would only listen on `127.0.0.1`. The app runs in automatic mode, so Enhance restarts it if it stops and after each new deploy.
 
 ## 4. Connect the database and finish setup
 
@@ -73,6 +76,8 @@ With auto deploy on, publishing a new release updates the `dist` branch. Enhance
 ## Troubleshooting
 
 - **"MailMCP needs Node.js 22.15 or newer"** in the log: choose a newer Node version in the Node.js app settings.
-- **"Port 8787 is already in use"**: pick another port in Enhance and add `--port <port>` to the startup command.
+- **"Port 3000 is already in use"**: choose another port in Enhance and use the same number in `--port`.
+- **502 / site unreachable:** make sure the startup command includes `--host 0.0.0.0` and the port numbers match.
+- **Can't stay signed in:** open the site over `https://` (MailMCP marks login cookies secure when it listens on `0.0.0.0`).
 - **The site still shows Enhance's default page:** check that the Node.js app proxies the whole website and its startup mode is Automatic.
-- **Forgot the setup code:** restart the app (switch startup mode to Manual and back to Automatic). A new code is written each time the installer starts.
+- **Forgot the setup code:** restart the worker process in Enhance; a new code is written each time the installer starts.

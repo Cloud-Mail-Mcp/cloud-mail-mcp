@@ -153,6 +153,23 @@ The dev stack's Compose project is `mailmcp-dev`, so it never collides with a pr
 
 **Checks:** `pnpm typecheck` · `pnpm lint` · `pnpm test`. Tests include integration and end-to-end suites against GreenMail; they skip themselves if it isn't running.
 
+## Releasing a new version
+
+One command updates every install method together:
+
+```bash
+pnpm release 0.2.0 --dry-run   # preview
+pnpm release 0.2.0             # bump versions, check, tag v0.2.0, push
+```
+
+It checks that `main` is clean, in sync and green on CI. It then bumps the version (including the Easypanel template's pinned image), runs lint and typecheck, and pushes the tag. GitHub Actions builds the Docker image and the Node.js bundle. **Only if both succeed** does it publish them all at once:
+
+- Docker image `:0.2.0` / `:latest`
+- the `dist` branch for Enhance and git-deploy hosts
+- the GitHub release with the installer, Compose file and zip
+
+Installs see the update after that, through Settings → Updates, auto-deploy, or the updater. Every push to `main` publishes the `edge` image and the `dist-edge` branch the same way.
+
 ## License
 
 [AGPL-3.0](LICENSE).
