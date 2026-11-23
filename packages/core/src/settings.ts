@@ -59,6 +59,14 @@ export const settingDefs = {
     }),
     secretFields: ["apiKey"],
   },
+  /** How the admin panel shows mail. */
+  mail: {
+    schema: z.object({
+      /** Block remote images (and the tracking pixels in them) until "Show images" is clicked. */
+      blockRemoteImages: z.boolean().default(false),
+    }),
+    secretFields: [],
+  },
   /** First-run wizard state. The wizard shows until `completedAt` is set. */
   setup: {
     schema: z.object({ completedAt: z.string().nullable().default(null) }),

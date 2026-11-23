@@ -423,12 +423,40 @@ export function AssistantCard() {
   );
 }
 
+/** Mail display preferences. */
+export function MailCard() {
+  const s = useSetting("mail");
+  if (s.q.isLoading) return <Spinner />;
+  return (
+    <Card title="Mail">
+      <div className="space-y-4">
+        <Checkbox
+          id="blockimg"
+          label="Block remote images in email until I click “Show images”"
+          checked={getPath(s.draft, "blockRemoteImages") === true}
+          onChange={(v) => s.set("blockRemoteImages", v)}
+        />
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Images in email are loaded from the sender's server, which lets senders see when you open
+          their mail (tracking pixels). Blocking them keeps that private.
+        </p>
+        {s.err && <Alert tone="error" title={s.err.message} />}
+        {s.saved && <Alert tone="success" title="Saved." />}
+        <Button busy={s.save.isPending} onClick={() => s.save.mutate()}>
+          Save
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" description="Instance-wide settings, stored in the database." />
       <div className="space-y-6">
         <GeneralCard />
+        <MailCard />
         <UpdatesCard />
         <AssistantCard />
         <StorageCard />

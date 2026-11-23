@@ -46,6 +46,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   mailboxes too). **X** selects the open message, **Delete** deletes the selection, **Esc**
   clears it. In Trash, deleting asks first, because it's permanent.
 - Opening an unread message marks it as read.
+- Images in email now show by default. To stop senders from seeing when you open their mail,
+  turn on **Block remote images** under Settings → Mail; then each message has a "Show images"
+  button.
 - Folder and unread counts update immediately when you read, move, archive or delete mail,
   instead of waiting for the next sync.
 

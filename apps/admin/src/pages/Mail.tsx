@@ -51,10 +51,19 @@ interface View {
 
 /**
  * Renders untrusted email HTML in a sandboxed iframe: no scripts, no forms, no same-origin
- * access, and a CSP that blocks remote content (tracking pixels) until the user allows it.
+ * access. Remote images load unless Settings → Mail blocks them (tracking pixels), in which case
+ * a CSP keeps them out until the user clicks "Show images".
  */
 function HtmlBody({ html }: { html: string }) {
-  const [showImages, setShowImages] = useState(false);
+  const prefs = useQuery({
+    queryKey: ["settings", "mail"],
+    queryFn: () => api<{ value: { blockRemoteImages?: boolean } }>("/settings/mail"),
+    staleTime: 60_000,
+  });
+  const [allowed, setAllowed] = useState(false);
+  // Until the preference loads nothing remote is fetched; if it can't load, use the default (show).
+  const block = prefs.data?.value.blockRemoteImages === true;
+  const showImages = allowed || (!prefs.isLoading && !block);
   const ref = useRef<HTMLIFrameElement>(null);
   const hasRemote = /<img[^>]+src=["']?https?:/i.test(html);
   const csp = showImages
@@ -70,12 +79,12 @@ function HtmlBody({ html }: { html: string }) {
 
   return (
     <div>
-      {hasRemote && !showImages && (
+      {hasRemote && !showImages && !prefs.isLoading && (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
           Remote images are blocked to prevent tracking.
           <button
             type="button"
-            onClick={() => setShowImages(true)}
+            onClick={() => setAllowed(true)}
             className="font-medium text-blue-600 hover:underline"
           >
             Show images
