@@ -17,7 +17,8 @@ const STEPS = [
   { title: "Sync", blurb: "How much mail to download. The defaults work well for most mailboxes." },
   {
     title: "Mailbox",
-    blurb: "Connect the first mailbox MailMCP should index. You can add more any time under Accounts.",
+    blurb:
+      "Connect the first mailbox MailMCP should index. You can add more any time under Accounts.",
   },
   { title: "Finish", blurb: "Back up your encryption key, then connect your AI." },
 ];
@@ -121,7 +122,10 @@ export function SetupWizard({ hasUsers }: { hasUsers: boolean }) {
         {step === 4 && (
           <div className="space-y-4">
             {connected.length > 0 && (
-              <Alert tone="success" title={`Connected: ${connected.map((c) => c.address).join(", ")}`}>
+              <Alert
+                tone="success"
+                title={`Connected: ${connected.map((c) => c.address).join(", ")}`}
+              >
                 Syncing has started in the background.
               </Alert>
             )}

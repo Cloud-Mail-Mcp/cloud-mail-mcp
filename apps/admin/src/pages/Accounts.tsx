@@ -372,7 +372,10 @@ export function AddAccountPage() {
       <AddAccountForm
         onSaved={(a) => navigate(`/accounts/${a.id}`)}
         secondary={
-          <Link href="/accounts" className="px-3 py-2 text-sm text-zinc-600 hover:underline dark:text-zinc-400">
+          <Link
+            href="/accounts"
+            className="px-3 py-2 text-sm text-zinc-600 hover:underline dark:text-zinc-400"
+          >
             Cancel
           </Link>
         }
