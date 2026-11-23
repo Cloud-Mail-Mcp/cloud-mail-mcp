@@ -1,17 +1,22 @@
-# Publishes the Docker image to GitHub Container Registry for whichever repository runs this
-# workflow — the original project or anyone's fork — so every copy can ship its own builds.
+# Builds and publishes MailMCP for every install method AT ONCE, for whichever repository runs
+# this workflow — the original project or anyone's fork.
 #
-#   push to main      → ghcr.io/<owner>/<repo>:edge        ("Every change" update channel)
-#                       + Node.js bundle pushed to the `dist-edge` branch
-#   push tag v1.2.3   → :1.2.3, :1.2, :latest               ("Stable releases" channel)
-#                       + Node.js bundle pushed to the `dist` branch
-#                       + a GitHub release with install.sh, compose.yml and mailmcp-node-1.2.3.zip
+#   push tag v1.2.3  (stable)            push to main  (edge)
+#   ──────────────────────────────       ──────────────────────────────
+#   image  ghcr.io/<repo>:1.2.3, :1.2,   image  ghcr.io/<repo>:edge
+#          :latest                        branch dist-edge  (Node bundle)
+#   branch dist  (Node bundle, for Enhance / git-deploy hosts)
+#   GitHub release with install.sh, compose.yml, mailmcp-node-1.2.3.zip
 #
-# The `dist` / `dist-edge` branches hold a ready-to-run bundle (no build step), for hosting panels
-# that deploy straight from a git branch, such as Enhance "GitHub deploy".
+# Nothing users follow changes until EVERYTHING has built and passed its checks:
+#   1. build:   image pushed only under an internal sha-<commit> tag; bundle built + smoke-tested
+#   2. publish: draft release → move image tags → push dist branch → make release public
+# In-app update checks only see a release once it's public, i.e. after every channel is live.
 #
-# After the first publish, make the package public once:
-#   GitHub → your profile/org → Packages → mailmcp → Package settings → Change visibility → Public
+# Cut a release with:  pnpm release 1.2.3   (bumps versions, runs checks, tags, pushes)
+#
+# After the very first publish, make the package public once:
+#   GitHub → your org/profile → Packages → mailmcp → Package settings → Change visibility → Public
 name: Release
 
 on:
@@ -24,31 +29,36 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
-  image:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      stable: ${{ steps.v.outputs.stable }}
+      image: ${{ steps.v.outputs.image }}
+      build_tag: ${{ steps.v.outputs.build_tag }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Version
-        id: v
+      - id: v
         run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "build_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "stable=true" >> "$GITHUB_OUTPUT"
           else
             echo "version=edge-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "stable=false" >> "$GITHUB_OUTPUT"
           fi
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=sha,format=short
+
+  image:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -56,21 +66,26 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - name: Build (pushed under the internal build tag only)
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ needs.prepare.outputs.image }}:${{ needs.prepare.outputs.build_tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
           build-args: |
-            MAILMCP_VERSION=${{ steps.v.outputs.version }}
+            MAILMCP_VERSION=${{ needs.prepare.outputs.version }}
             MAILMCP_REVISION=${{ github.sha }}
             MAILMCP_REPO=${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   bundle:
+    needs: prepare
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,20 +95,10 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Version
-        id: v
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "branch=dist" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=edge-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-            echo "branch=dist-edge" >> "$GITHUB_OUTPUT"
-          fi
       - name: Build the Node.js bundle
         run: pnpm --filter @mailmcp/admin build && node scripts/build-bundle.mjs
         env:
-          MAILMCP_VERSION: ${{ steps.v.outputs.version }}
+          MAILMCP_VERSION: ${{ needs.prepare.outputs.version }}
           MAILMCP_REVISION: ${{ github.sha }}
           MAILMCP_REPO: ${{ github.repository }}
       - name: Smoke test (starts and serves the database installer)
@@ -106,38 +111,71 @@ jobs:
         with:
           name: node-bundle
           path: dist/mailmcp-node-*.zip
-      - name: Publish to the ${{ steps.v.outputs.branch }} branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ steps.v.outputs.branch }}
-          VERSION: ${{ steps.v.outputs.version }}
+
+  # Runs only if the image AND the bundle both built: every install method updates together.
+  publish:
+    needs: [prepare, image, bundle]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      STABLE: ${{ needs.prepare.outputs.stable }}
+      IMAGE: ${{ needs.prepare.outputs.image }}
+      BUILD_TAG: ${{ needs.prepare.outputs.build_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: node-bundle
+          path: dist
+      - name: Prepare release assets for this repository
         run: |
-          cd dist/bundle
+          sed "s|__REPO__|${GITHUB_REPOSITORY}|" deploy/install.sh > dist/install.sh
+          cp deploy/compose.yml dist/compose.yml
+          grep -q "$GITHUB_REPOSITORY" dist/install.sh
+          (cd dist && unzip -q mailmcp-node-*.zip)
+
+      - name: 1/4 Draft the GitHub release (stable only; not visible to update checks yet)
+        if: env.STABLE == 'true'
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/install.sh dist/compose.yml dist/mailmcp-node-*.zip \
+            --draft --title "MailMCP $GITHUB_REF_NAME" --generate-notes --verify-tag
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: 2/4 Point the image tags at this build (Docker installs and panels)
+        run: |
+          if [[ "$STABLE" == "true" ]]; then
+            MINOR="${VERSION%.*}"
+            docker buildx imagetools create -t "$IMAGE:$VERSION" -t "$IMAGE:$MINOR" -t "$IMAGE:latest" "$IMAGE:$BUILD_TAG"
+          else
+            docker buildx imagetools create -t "$IMAGE:edge" "$IMAGE:$BUILD_TAG"
+          fi
+
+      - name: 3/4 Push the ready-to-run bundle branch (Enhance and other git-deploy hosts)
+        run: |
+          BRANCH=$([[ "$STABLE" == "true" ]] && echo dist || echo dist-edge)
+          cd dist/mailmcp
           git init -q -b "$BRANCH"
           git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "MailMCP $VERSION (built from $GITHUB_SHA)"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
 
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [image, bundle]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare install assets for this repository
+      - name: 4/4 Publish the release (installs now see the update)
+        if: env.STABLE == 'true'
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+
+      - name: Summary
         run: |
-          mkdir -p dist
-          sed "s|__REPO__|${GITHUB_REPOSITORY}|" deploy/install.sh > dist/install.sh
-          cp deploy/compose.yml dist/compose.yml
-          grep -q "$GITHUB_REPOSITORY" dist/install.sh
-      - uses: actions/download-artifact@v4
-        with:
-          name: node-bundle
-          path: dist
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/install.sh dist/compose.yml dist/mailmcp-node-*.zip \
-            --title "MailMCP $GITHUB_REF_NAME" --generate-notes --verify-tag
+          {
+            echo "### MailMCP $VERSION published"
+            echo "- Docker image: \`$IMAGE:$([[ "$STABLE" == "true" ]] && echo "$VERSION\` (+ \`latest\`)" || echo 'edge`')"
+            echo "- Bundle branch: \`$([[ "$STABLE" == "true" ]] && echo dist || echo dist-edge)\`"
+            [[ "$STABLE" == "true" ]] && echo "- Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
+            true
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -20,7 +20,8 @@
     "db:generate": "pnpm --filter @mailmcp/db generate",
     "db:migrate": "pnpm --filter @mailmcp/db migrate",
     "test": "turbo run test",
-    "bundle": "pnpm --filter @mailmcp/admin build && node scripts/build-bundle.mjs"
+    "bundle": "pnpm --filter @mailmcp/admin build && node scripts/build-bundle.mjs",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",
