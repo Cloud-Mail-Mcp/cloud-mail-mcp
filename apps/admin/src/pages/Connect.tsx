@@ -13,7 +13,12 @@ interface ConsentInfo {
     clientKind: string;
     redirectHost: string;
   };
-  mailboxes: Array<{ id: string; address: string; displayName: string | null }>;
+  mailboxes: Array<{
+    id: string;
+    address: string;
+    displayName: string | null;
+    label: string | null;
+  }>;
   existing: Array<{ id: string; name: string; clientId: string | null }>;
   presets: Array<{ key: Preset; label: string }>;
 }
@@ -157,6 +162,7 @@ export function ConnectPage() {
                         <span className="min-w-0 flex-1 truncate text-sm text-zinc-800 dark:text-zinc-200">
                           {m.displayName ? `${m.displayName} · ` : ""}
                           {m.address}
+                          {m.label && <span className="text-zinc-500"> · {m.label}</span>}
                         </span>
                         <PresetSelect
                           value={perBox[m.id] ?? allPreset}

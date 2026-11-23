@@ -5,6 +5,8 @@ export const QUEUES = {
   sync: "sync-account",
   /** Approved sends waiting to go out. */
   send: "send-message",
+  /** One pass of an account → account migration (one at a time per migration). */
+  migrate: "migrate-mail",
 } as const;
 
 export interface SyncJob {
@@ -33,6 +35,11 @@ export class Jobs {
         retryBackoff: true,
         expireInSeconds: 60 * 60,
       });
+      await this.boss.createQueue(QUEUES.migrate, {
+        policy: "stately",
+        retryLimit: 0,
+        expireInSeconds: 30 * 60,
+      });
       await this.boss.createQueue(QUEUES.send, {
         retryLimit: 3,
         retryDelay: 30,
@@ -48,6 +55,15 @@ export class Jobs {
       singletonKey: job.accountId,
       startAfter: opts.delaySeconds,
     });
+  }
+
+  async enqueueMigration(migrationId: string, opts: { delaySeconds?: number } = {}) {
+    await this.start();
+    return this.boss.send(
+      QUEUES.migrate,
+      { migrationId },
+      { singletonKey: migrationId, startAfter: opts.delaySeconds },
+    );
   }
 
   async stop() {

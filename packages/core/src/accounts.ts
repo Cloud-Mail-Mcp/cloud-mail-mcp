@@ -143,18 +143,39 @@ export class AccountService {
   async create(
     orgId: string,
     userId: string,
-    input: { moduleId: string; address: string; displayName?: string; config: unknown },
+    input: {
+      moduleId: string;
+      address: string;
+      displayName?: string;
+      label?: string;
+      config: unknown;
+    },
   ) {
     const manifest = this.registry.get(input.moduleId);
     const config = this.parseConfig(manifest, input.config);
     const address = input.address.trim().toLowerCase();
 
+    // The same address may be connected more than once through different servers (moving
+    // hosts), but not twice with the same login.
     const existing = await this.db
-      .select({ id: accounts.id })
+      .select()
       .from(accounts)
       .where(and(eq(accounts.orgId, orgId), sql`lower(${accounts.address}) = ${address}`));
-    if (existing.length)
-      throw new AccountError(`${address} is already connected.`, 409, { code: "DUPLICATE" });
+    const login = loginKey(config);
+    for (const row of existing) {
+      let same = false;
+      try {
+        same = row.moduleId === manifest.id && loginKey(this.decrypt(row)) === login;
+      } catch {
+        // Unreadable credentials: treat as a different login.
+      }
+      if (same)
+        throw new AccountError(
+          `${address} is already connected with this login${row.label ? ` (${row.label})` : ""}.`,
+          409,
+          { code: "DUPLICATE" },
+        );
+    }
 
     let probe: Awaited<ReturnType<AccountService["probe"]>>;
     try {
@@ -173,6 +194,7 @@ export class AccountService {
         moduleId: manifest.id,
         address,
         displayName: input.displayName?.trim() || null,
+        label: input.label?.trim() || (existing.length ? serverName(config) : null),
         credentialsEnc: encryptJson(dataKey, config, id),
         dataKeyEnc: wrapped,
         status: "pending",
@@ -180,6 +202,18 @@ export class AccountService {
         settings: { traits: probe.identity.traits ?? {} },
       });
       await this.upsertFolders(tx as unknown as Db, id, probe.remote);
+      // Give the other logins for this address a label too, so they can be told apart.
+      for (const row of existing) {
+        if (row.label) continue;
+        let name: string | null = null;
+        try {
+          name = serverName(this.decrypt(row));
+        } catch {}
+        await tx
+          .update(accounts)
+          .set({ label: name ?? "Previous login" })
+          .where(eq(accounts.id, row.id));
+      }
     });
     await audit(this.db, {
       orgId,
@@ -200,6 +234,7 @@ export class AccountService {
         moduleId: accounts.moduleId,
         address: accounts.address,
         displayName: accounts.displayName,
+        label: accounts.label,
         status: accounts.status,
         statusMessage: accounts.statusMessage,
         lastSyncAt: accounts.lastSyncAt,
@@ -212,7 +247,7 @@ export class AccountService {
       .leftJoin(folders, eq(folders.accountId, accounts.id))
       .where(eq(accounts.orgId, orgId))
       .groupBy(accounts.id)
-      .orderBy(accounts.address);
+      .orderBy(accounts.address, accounts.createdAt);
     return rows;
   }
 
@@ -262,6 +297,7 @@ export class AccountService {
       moduleId: row.moduleId,
       address: row.address,
       displayName: row.displayName,
+      label: row.label,
       status: row.status,
       statusMessage: row.statusMessage,
       lastSyncAt: row.lastSyncAt,
@@ -281,13 +317,21 @@ export class AccountService {
     orgId: string,
     userId: string,
     id: string,
-    input: { displayName?: string | null; config?: Config; instructions?: string | null },
+    input: {
+      displayName?: string | null;
+      label?: string | null;
+      config?: Config;
+      instructions?: string | null;
+      /** Save connection settings without logging in first (e.g. server briefly down). */
+      skipTest?: boolean;
+    },
   ) {
     const row = await this.row(orgId, id);
     const manifest = this.registry.get(row.moduleId);
     const patch: Partial<typeof accounts.$inferInsert> = {};
 
     if (input.displayName !== undefined) patch.displayName = input.displayName?.trim() || null;
+    if (input.label !== undefined) patch.label = input.label?.trim() || null;
     if (input.instructions !== undefined) patch.instructions = input.instructions?.trim() || null;
 
     if (input.config) {
@@ -298,20 +342,24 @@ export class AccountService {
         if (v === undefined || v === "") setPath(merged, f, getPath(current, f));
       }
       const config = this.parseConfig(manifest, merged);
-      let probe: Awaited<ReturnType<AccountService["probe"]>>;
-      try {
-        probe = await this.probe(manifest, row.address, config);
-      } catch (err) {
-        const f = friendlyError(err);
-        throw new AccountError(f.message, 422, { code: f.code, hint: f.hint });
+      let probe: Awaited<ReturnType<AccountService["probe"]>> | null = null;
+      if (!input.skipTest) {
+        try {
+          probe = await this.probe(manifest, row.address, config);
+        } catch (err) {
+          const f = friendlyError(err);
+          throw new AccountError(f.message, 422, { code: f.code, hint: f.hint });
+        }
       }
       const dataKey = unwrapDataKey(this.master, row.dataKeyEnc, row.id);
       patch.credentialsEnc = encryptJson(dataKey, config, row.id);
-      if (row.status === "auth_error" || row.status === "error") {
+      if (row.status !== "disabled") {
         patch.status = "pending";
-        patch.statusMessage = "Settings updated. Waiting for sync.";
+        patch.statusMessage = probe
+          ? "Settings updated. Waiting for sync."
+          : "Settings saved without testing. Waiting for sync.";
       }
-      await this.upsertFolders(this.db, id, probe.remote);
+      if (probe) await this.upsertFolders(this.db, id, probe.remote);
     }
 
     if (Object.keys(patch).length)
@@ -425,4 +473,17 @@ export class AccountService {
           : eq(folders.accountId, accountId),
       );
   }
+}
+
+/** Which server and user an account logs in as (module config; IMAP-shaped when present). */
+function loginKey(config: Config): string {
+  const host = getPath(config, "imap.host") ?? getPath(config, "host") ?? "";
+  const user = getPath(config, "username") ?? getPath(config, "user") ?? "";
+  return `${String(host).toLowerCase()}|${String(user).toLowerCase()}`;
+}
+
+/** A short name for the server an account uses, e.g. "mail.example.com". */
+function serverName(config: Config): string | null {
+  const host = getPath(config, "imap.host") ?? getPath(config, "host");
+  return typeof host === "string" && host ? host.toLowerCase() : null;
 }

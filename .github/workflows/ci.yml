@@ -28,7 +28,7 @@ jobs:
       greenmail:
         image: greenmail/standalone:2.1.5
         env:
-          GREENMAIL_OPTS: "-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=alice:alice-pass-123@example.test,bob:bob-pass-456@example.test,carol:carol-pass-789@example.test -Dgreenmail.users.login=email -Dgreenmail.startup.timeout=30000"
+          GREENMAIL_OPTS: "-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=alice:alice-pass-123@example.test,bob:bob-pass-456@example.test,carol:carol-pass-789@example.test,dave:dave-pass-246@example.test,erin:erin-pass-135@example.test -Dgreenmail.users.login=email -Dgreenmail.startup.timeout=30000"
         ports: ["3025:3025", "3143:3143"]
     steps:
       - uses: actions/checkout@v4

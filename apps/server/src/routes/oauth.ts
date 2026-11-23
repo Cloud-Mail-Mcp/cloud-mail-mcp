@@ -143,7 +143,12 @@ export async function oauthRoutes(app: FastifyInstance, d: AppDeps) {
     try {
       const r = d.oauth.request(id);
       const mailboxes = await d.db
-        .select({ id: accounts.id, address: accounts.address, displayName: accounts.displayName })
+        .select({
+          id: accounts.id,
+          address: accounts.address,
+          displayName: accounts.displayName,
+          label: accounts.label,
+        })
         .from(accounts)
         .where(eq(accounts.orgId, req.user.orgId));
       const existing = (await d.agents.list(req.user.orgId))

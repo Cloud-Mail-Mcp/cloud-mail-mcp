@@ -8,11 +8,16 @@ const TestBody = z.object({
   address: z.email(),
   config: z.record(z.string(), z.unknown()),
 });
-const CreateBody = TestBody.extend({ displayName: z.string().max(100).optional() });
+const CreateBody = TestBody.extend({
+  displayName: z.string().max(100).optional(),
+  label: z.string().max(60).optional(),
+});
 const UpdateBody = z.object({
   displayName: z.string().max(100).nullable().optional(),
+  label: z.string().max(60).nullable().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
   instructions: z.string().max(4000).nullable().optional(),
+  skipTest: z.boolean().optional(),
 });
 const IdParams = z.object({ id: z.uuid() });
 
@@ -54,7 +59,10 @@ export async function accountRoutes(
     const { id } = IdParams.parse(req.params);
     const b = UpdateBody.parse(req.body);
     const account = await accounts.update(req.user.orgId, req.user.id, id, b);
-    if (b.config) await pool.evict(id); // reconnect with the new settings
+    if (b.config) {
+      await pool.evict(id); // reconnect with the new settings
+      await jobs.enqueueSync({ accountId: id, reason: "settings" }).catch(() => {});
+    }
     return { account };
   });
 

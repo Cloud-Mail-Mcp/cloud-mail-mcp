@@ -9,6 +9,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Spinner } from "../components/ui";
 import {
   type AccountSummary,
+  accountName,
   addr,
   api,
   type MailFolder,
@@ -360,7 +361,8 @@ function Reader({
             {current.subject || "(no subject)"}
           </h2>
           <p className="text-xs text-zinc-500">
-            {current.account} · {current.folders.join(", ")}
+            {current.account}
+            {current.accountLabel && <> ({current.accountLabel})</>} · {current.folders.join(", ")}
             {msgs.length > 1 && <> · {msgs.length} messages</>}
           </p>
         </div>
@@ -879,7 +881,14 @@ export function MailPage() {
                 >
                   <path d="M7.2 4.2a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06L8.26 15.8a.75.75 0 1 1-1.06-1.06L11.94 10 7.2 5.26a.75.75 0 0 1 0-1.06Z" />
                 </svg>
-                <span className="min-w-0 flex-1 truncate">{a.displayName ?? a.address}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {a.displayName ?? a.address}
+                  {a.label && (
+                    <span className="ml-1.5 font-normal normal-case tracking-normal text-zinc-400 dark:text-zinc-500">
+                      {a.label}
+                    </span>
+                  )}
+                </span>
                 {!open && unread > 0 && (
                   <span className="text-xs font-normal normal-case tabular-nums text-blue-600 dark:text-blue-400">
                     {unread.toLocaleString()}
@@ -899,7 +908,7 @@ export function MailPage() {
                         pick({
                           accountId: a.id,
                           folder: String(f.id),
-                          label: `${a.displayName ?? a.address} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
+                          label: `${accountName(a)} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
                         })
                       }
                     >
@@ -1146,7 +1155,10 @@ export function MailPage() {
                     </p>
                     <p className="truncate text-xs text-zinc-500">{m.snippet ?? ""}</p>
                     {!view.accountId && (accountsQ.data?.accounts.length ?? 0) > 1 && (
-                      <p className="mt-0.5 truncate text-[11px] text-zinc-400">{m.account}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-zinc-400">
+                        {m.account}
+                        {m.accountLabel && ` · ${m.accountLabel}`}
+                      </p>
                     )}
                   </button>
                 </li>

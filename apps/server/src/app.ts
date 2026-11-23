@@ -9,6 +9,7 @@ import {
   createServices,
   MailError,
   MailService,
+  MigrationError,
   OAuthService,
   PolicyService,
   type Services,
@@ -27,6 +28,7 @@ import { auditRoutes } from "./routes/audit";
 import { authRoutes } from "./routes/auth";
 import { chatRoutes } from "./routes/chat";
 import { mailRoutes } from "./routes/mail";
+import { migrationRoutes } from "./routes/migrations";
 import { CORS_PATHS, oauthRoutes } from "./routes/oauth";
 import { settingsRoutes } from "./routes/settings";
 import { systemRoutes } from "./routes/system";
@@ -128,7 +130,7 @@ export async function buildApp(opts: {
     }
     if (err instanceof AccountError)
       return reply.code(err.status).send({ error: err.message, ...err.detail });
-    if (err instanceof AccessDenied || err instanceof MailError)
+    if (err instanceof AccessDenied || err instanceof MailError || err instanceof MigrationError)
       return reply.code(err.status).send({ error: err.message });
     const status = (err as { statusCode?: number }).statusCode ?? 500;
     if (status >= 500) req.log.error(err);
@@ -157,6 +159,7 @@ export async function buildApp(opts: {
   await app.register(async (r) => auditRoutes(r, deps));
   await app.register(async (r) => oauthRoutes(r, deps));
   await app.register(async (r) => chatRoutes(r, deps));
+  await app.register(async (r) => migrationRoutes(r, deps));
   await app.register(async (r) => mcpRoutes(r, deps));
 
   // Serve the built admin panel at /admin (in dev, Vite serves it on :5173 instead).

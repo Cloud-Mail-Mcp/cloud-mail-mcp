@@ -258,6 +258,24 @@ export class ProviderLimitError extends Error {
   }
 }
 
+/** One message in a folder listing used to copy mail between accounts. */
+export interface InventoryItem {
+  /** Position in the folder (IMAP UID). Increases as mail arrives. */
+  uid: number;
+  /** Message-ID header, used to recognise the same message on both sides. */
+  messageId: string | null;
+  /** When the server received it (kept when copying). */
+  date: Date | null;
+  size: number;
+  flags: MessageFlags;
+}
+
+export interface Inventory {
+  /** Changes when the server renumbers the folder; positions are only valid within one. */
+  uidValidity: string;
+  items: InventoryItem[];
+}
+
 // ───────────────────────────── The connector ─────────────────────────────
 
 export interface Connector {
@@ -298,6 +316,18 @@ export interface Connector {
   ): Promise<void>;
   /** Permanently remove (expunge). Moving to trash is done by core via `move`. */
   expunge(folder: RemoteFolder, refs: MessageRef[]): Promise<void>;
+
+  /**
+   * List a folder's messages with their Message-IDs, for copying mail to another account.
+   * `afterUid` lists only newer mail; `since` only mail received on or after that date.
+   */
+  inventory?(folder: RemoteFolder, opts?: { afterUid?: number; since?: Date }): Promise<Inventory>;
+  /** Store a complete message (RFC 5322 source) in a folder, keeping its flags and date. */
+  append?(
+    folder: RemoteFolder,
+    raw: Buffer,
+    opts?: { flags?: Partial<Omit<MessageFlags, "keywords">>; date?: Date },
+  ): Promise<void>;
 
   createFolder?(path: string): Promise<RemoteFolder>;
   renameFolder?(folder: RemoteFolder, newPath: string): Promise<RemoteFolder>;

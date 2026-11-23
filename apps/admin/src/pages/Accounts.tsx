@@ -109,10 +109,23 @@ export function AccountsPage() {
                     >
                       {a.displayName ?? a.address}
                     </Link>
+                    {a.label && (
+                      <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        {a.label}
+                      </span>
+                    )}
                     {a.displayName && <p className="text-xs text-zinc-500">{a.address}</p>}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={a.status} />
+                    {(a.status === "auth_error" || a.status === "error") && (
+                      <Link
+                        href={`/accounts/${a.id}`}
+                        className="ml-2 text-xs text-blue-600 hover:underline"
+                      >
+                        Fix login
+                      </Link>
+                    )}
                   </td>
                   <td className="hidden px-4 py-3 text-right tabular-nums text-zinc-600 sm:table-cell dark:text-zinc-400">
                     {fmt(a.folderCount)}
@@ -395,9 +408,10 @@ export function AccountDetailPage({ id }: { id: string }) {
   const module = modulesQ.data?.modules.find((m) => m.id === account?.moduleId);
 
   const [displayName, setDisplayName] = useState("");
+  const [label, setLabel] = useState("");
   const [config, setConfig] = useState<Obj>({});
   const [err, setErr] = useState<ApiError | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<false | "tested" | "untested">(false);
   const [confirmDelete, setConfirmDelete] = useState("");
 
   // Initialize the form once per account (polling must not overwrite edits in progress).
@@ -406,6 +420,7 @@ export function AccountDetailPage({ id }: { id: string }) {
     if (account && loadedFor.current !== account.id) {
       loadedFor.current = account.id;
       setDisplayName(account.displayName ?? "");
+      setLabel(account.label ?? "");
       setConfig({ ...account.config, password: "" });
     }
   }, [account]);
@@ -416,18 +431,24 @@ export function AccountDetailPage({ id }: { id: string }) {
   };
 
   const saveM = useMutation({
-    mutationFn: () =>
+    mutationFn: (opts: { skipTest?: boolean } = {}) =>
       api<{ account: AccountDetail }>(`/accounts/${id}`, {
         method: "PATCH",
-        body: { displayName: displayName || null, config },
+        body: {
+          displayName: displayName || null,
+          label: label || null,
+          config,
+          skipTest: opts.skipTest,
+        },
       }),
     onMutate: () => {
       setErr(null);
       setSaved(false);
     },
-    onSuccess: async (d) => {
+    onSuccess: async (d, opts) => {
       await refresh(d);
-      setSaved(true);
+      setSaved(opts?.skipTest ? "untested" : "tested");
+      setConfig((c) => setPath(c, "password", ""));
     },
     onError: (e) => setErr(e as ApiError),
   });
@@ -472,6 +493,11 @@ export function AccountDetailPage({ id }: { id: string }) {
         description={
           <span className="flex flex-wrap items-center gap-2">
             {account.displayName && <span>{account.address}</span>}
+            {account.label && (
+              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                {account.label}
+              </span>
+            )}
             <StatusBadge status={account.status} />
             {account.statusMessage && <span>{account.statusMessage}</span>}
           </span>
@@ -479,6 +505,22 @@ export function AccountDetailPage({ id }: { id: string }) {
       />
 
       <div className="space-y-6">
+        {(account.status === "auth_error" || account.status === "error") && (
+          <Alert
+            tone="error"
+            title={
+              account.status === "auth_error"
+                ? "MailMCP can't log in to this mailbox"
+                : "MailMCP can't reach this mailbox"
+            }
+          >
+            If the password changed or the mail server moved,{" "}
+            <a href="#connection" className="font-medium underline">
+              update the login and server settings
+            </a>
+            .
+          </Alert>
+        )}
         <Card
           title={`Folders · ${fmt(totalMessages)} messages`}
           actions={
@@ -533,11 +575,15 @@ export function AccountDetailPage({ id }: { id: string }) {
 
         <InstructionsCard accountId={id} initial={account.instructions ?? ""} onSaved={refresh} />
 
-        <Card title="Connection settings">
+        <Card title="Login & server settings" className="scroll-mt-6">
+          <p id="connection" className="-mt-1 mb-4 scroll-mt-6 text-sm text-zinc-500">
+            Changed your password, or did the mail server's address change? Update it here. MailMCP
+            logs in with the new settings before saving them.
+          </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              saveM.mutate();
+              saveM.mutate({});
             }}
             className="space-y-5"
           >
@@ -547,6 +593,18 @@ export function AccountDetailPage({ id }: { id: string }) {
                   id="dn"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Label"
+                htmlFor="acct-label"
+                hint='Optional. Tells logins for the same address apart, e.g. "Old host".'
+              >
+                <Input
+                  id="acct-label"
+                  value={label}
+                  maxLength={60}
+                  onChange={(e) => setLabel(e.target.value)}
                 />
               </Field>
               <SchemaFields
@@ -568,14 +626,38 @@ export function AccountDetailPage({ id }: { id: string }) {
             {err && (
               <Alert tone="error" title={err.message}>
                 {err.hint}
+                {err.status === 422 && (
+                  <p className="mt-1">
+                    If you're sure the settings are right (for example the server is briefly down),
+                    you can save them without testing.
+                  </p>
+                )}
               </Alert>
             )}
-            {saved && (
+            {saved === "tested" && (
               <Alert tone="success" title="Saved. The new settings were tested and work." />
             )}
-            <Button type="submit" busy={saveM.isPending}>
-              Test & save
-            </Button>
+            {saved === "untested" && (
+              <Alert
+                tone="warning"
+                title="Saved without testing. The next sync will show whether they work."
+              />
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" busy={saveM.isPending}>
+                Test & save
+              </Button>
+              {err?.status === 422 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={saveM.isPending}
+                  onClick={() => saveM.mutate({ skipTest: true })}
+                >
+                  Save without testing
+                </Button>
+              )}
+            </div>
           </form>
         </Card>
 

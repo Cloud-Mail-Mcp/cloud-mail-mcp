@@ -89,6 +89,11 @@ export const accounts = pgTable(
     moduleId: text("module_id").notNull(), // e.g. "imap", "msgraph"
     address: text("address").notNull(),
     displayName: text("display_name"),
+    /**
+     * Tells logins for the same address apart (e.g. "Old host" / "New host" during a move).
+     * Defaults to the server name when a second login for an address is added.
+     */
+    label: text("label"),
     /** Module config + secrets, AES-256-GCM encrypted with the account data key. */
     credentialsEnc: bytea("credentials_enc").notNull(),
     /** Per-account data key, wrapped (encrypted) by the master key. */
@@ -102,7 +107,8 @@ export const accounts = pgTable(
   },
   (t) => [
     index("accounts_org_idx").on(t.orgId),
-    uniqueIndex("accounts_org_address_uq").on(t.orgId, sql`lower(${t.address})`),
+    // Not unique: the same address can be connected through different servers (migrations).
+    index("accounts_org_address_idx").on(t.orgId, sql`lower(${t.address})`),
   ],
 );
 
@@ -523,4 +529,43 @@ export const oauthTokens = pgTable(
     index("oauth_tokens_agent_idx").on(t.agentId),
     index("oauth_tokens_family_idx").on(t.family),
   ],
+);
+
+// ───────────────────────────── Migrations (account → account copy) ─────────────────────────────
+
+/**
+ * Copies mail from one account to another (e.g. the same address on an old and a new host),
+ * optionally both ways and on repeat until it's finished. Never deletes anything.
+ */
+export const migrations = pgTable(
+  "migrations",
+  {
+    id: id(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    fromAccountId: uuid("from_account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    toAccountId: uuid("to_account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    /** Also copy mail that arrives in `to` back to `from`. */
+    twoWay: boolean("two_way").notNull().default(false),
+    /** Keep copying new mail every few minutes until finished. */
+    continuous: boolean("continuous").notNull().default(true),
+    /** "active" (runs), "paused", "finished". */
+    status: text("status").notNull().default("active"),
+    /** A pass is in progress (set while the worker holds it). */
+    running: boolean("running").notNull().default(false),
+    /** Per source folder: { "<accountId>|<path>": { uidValidity, lastUid, target, total, copied, skipped, failed } }. */
+    state: jsonb("state").notNull().default({}),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    /** When the first full pass finished (everything copied once). */
+    initialDoneAt: timestamp("initial_done_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("migrations_org_idx").on(t.orgId)],
 );

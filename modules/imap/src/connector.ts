@@ -4,6 +4,7 @@ import {
   type Connector,
   type FetchedMessage,
   type FolderRole,
+  type Inventory,
   type MessageFlags,
   type MessageRef,
   type ModuleContext,
@@ -452,6 +453,67 @@ export class ImapConnector implements Connector {
     await this.inFolder(folder, false, (client) =>
       client.messageDelete(this.uids(refs), { uid: true }),
     );
+  }
+
+  // ───────────────────────────── Copying between accounts ─────────────────────────────
+
+  async inventory(
+    folder: RemoteFolder,
+    opts: { afterUid?: number; since?: Date } = {},
+  ): Promise<Inventory> {
+    return this.inFolder(folder, true, async (client, mb) => {
+      const uidValidity = String(mb.uidValidity);
+      if (mb.exists === 0) return { uidValidity, items: [] };
+      const query: Record<string, unknown> = {};
+      if (opts.afterUid) query.uid = `${opts.afterUid + 1}:*`;
+      if (opts.since) query.since = opts.since;
+      if (!Object.keys(query).length) query.all = true;
+      const found = ((await client.search(query, { uid: true })) || []).filter(
+        (u) => !opts.afterUid || u > opts.afterUid,
+      );
+      const items: Inventory["items"] = [];
+      for (const part of chunk(found, 1000)) {
+        for await (const msg of client.fetch(
+          uidSet(part),
+          { uid: true, flags: true, size: true, internalDate: true, envelope: true },
+          { uid: true },
+        )) {
+          const d = msg.internalDate;
+          items.push({
+            uid: msg.uid,
+            messageId: msg.envelope?.messageId?.trim() || null,
+            date: d ? new Date(d) : null,
+            size: msg.size ?? 0,
+            flags: toFlags(msg.flags),
+          });
+        }
+      }
+      items.sort((a, b) => a.uid - b.uid);
+      return { uidValidity, items };
+    });
+  }
+
+  async append(
+    folder: RemoteFolder,
+    raw: Buffer,
+    opts: { flags?: Partial<Omit<MessageFlags, "keywords">>; date?: Date } = {},
+  ): Promise<void> {
+    const names: Record<string, string> = {
+      seen: "\\Seen",
+      flagged: "\\Flagged",
+      answered: "\\Answered",
+      draft: "\\Draft",
+    };
+    const flags = Object.entries(opts.flags ?? {})
+      .filter(([, v]) => v)
+      .map(([k]) => names[k])
+      .filter((v): v is string => !!v);
+    const client = await this.imap();
+    try {
+      await client.append(folder.remoteId, raw, flags, opts.date);
+    } catch (err) {
+      throw asLimitError(err);
+    }
   }
 
   async createFolder(path: string): Promise<RemoteFolder> {

@@ -4,13 +4,14 @@ import { Link, useLocation } from "wouter";
 import { api, type Me } from "../lib/api";
 
 const nav: Array<{ href: string; label: string; soon?: boolean }> = [
-  { href: "/accounts", label: "Accounts" },
   { href: "/mail", label: "Mail" },
   { href: "/chat", label: "Chat" },
   { href: "/agents", label: "Agents" },
   { href: "/permissions", label: "Permissions" },
   { href: "/approvals", label: "Approvals" },
   { href: "/audit", label: "Audit log" },
+  { href: "/migrations", label: "Migrations" },
+  { href: "/accounts", label: "Accounts" },
   { href: "/settings", label: "Settings" },
 ];
 

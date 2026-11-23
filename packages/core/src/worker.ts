@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { accounts, and, eq, folders, ne, sql } from "@mailmcp/db";
 import type { RemoteFolder } from "@mailmcp/module-sdk";
 import { QUEUES, type SyncJob } from "./jobs";
@@ -17,7 +18,8 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
   const log = createLogger(opts.embedded ? "worker(embedded)" : "worker");
   const SYNC_EVERY_MS = Number(process.env.SYNC_INTERVAL_SECONDS ?? 300) * 1000;
   const FULL_EVERY_MS = 24 * 60 * 60_000;
-  const { db, jobs, sync } = svc;
+  const MIGRATE_EVERY_MS = Number(process.env.MIGRATION_INTERVAL_SECONDS ?? 120) * 1000;
+  const { db, jobs, sync, migrations } = svc;
   await jobs.start();
 
   const syncCfg = await svc.settings.get("sync");
@@ -46,6 +48,18 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
     },
   );
 
+  // One migration pass at a time per migration; long copies continue in 4-minute slices.
+  await jobs.boss.work<{ migrationId: string }>(
+    QUEUES.migrate,
+    { localConcurrency: 2, batchSize: 1 },
+    async ([job]) => {
+      if (!job) return;
+      const { migrationId } = job.data;
+      const r = await migrations.runPass(migrationId);
+      if (r.more) await jobs.enqueueMigration(migrationId, { delaySeconds: 1 });
+    },
+  );
+
   // ─────────── Scheduler ───────────
   async function scheduleDue() {
     const rows = await db
@@ -62,18 +76,22 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
   }
 
   // ─────────── IDLE watchers on INBOX ───────────
-  const watchers = new Map<string, () => Promise<void>>();
+  const watchers = new Map<string, { stop: () => Promise<void>; settings: string }>();
+  /** Changes when the account's login or server settings change. */
+  const fingerprint = (a: { credentialsEnc: Buffer }) =>
+    createHash("sha256").update(a.credentialsEnc).digest("hex");
   async function refreshWatchers() {
     const rows = await db
       .select({ account: accounts, inbox: folders })
       .from(accounts)
       .innerJoin(folders, and(eq(folders.accountId, accounts.id), eq(folders.role, "inbox")))
       .where(ne(accounts.status, "disabled"));
-    const wanted = new Set(rows.map((r) => r.account.id));
-    for (const [id, stop] of watchers) {
-      if (!wanted.has(id)) {
+    const wanted = new Map(rows.map((r) => [r.account.id, fingerprint(r.account)]));
+    for (const [id, w] of watchers) {
+      // Gone, or its password/server changed: stop watching with the old settings.
+      if (wanted.get(id) !== w.settings) {
         watchers.delete(id);
-        await stop().catch(() => {});
+        await w.stop().catch(() => {});
       }
     }
     for (const { account, inbox } of rows) {
@@ -95,9 +113,12 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
           log.info("new mail signal", { accountId: account.id });
           jobs.enqueueSync({ accountId: account.id, reason: "idle" }).catch(() => {});
         });
-        watchers.set(account.id, async () => {
-          await stop();
-          await connector.close();
+        watchers.set(account.id, {
+          settings: fingerprint(account),
+          stop: async () => {
+            await stop();
+            await connector.close();
+          },
         });
       } catch (err) {
         log.warn("could not start IDLE watcher", {
@@ -110,6 +131,10 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
 
   const tick = async () => {
     await scheduleDue().catch((e) => log.error("schedule failed", { err: (e as Error).message }));
+    await migrations
+      .due(MIGRATE_EVERY_MS)
+      .then((ids) => Promise.all(ids.map((id) => jobs.enqueueMigration(id))))
+      .catch((e) => log.error("migration schedule failed", { err: (e as Error).message }));
     await refreshWatchers().catch((e) =>
       log.error("watchers failed", { err: (e as Error).message }),
     );
@@ -125,7 +150,7 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
   return async function stopWorker() {
     log.info("worker stopping");
     clearInterval(timer);
-    for (const stop of watchers.values()) await stop().catch(() => {});
+    for (const w of watchers.values()) await w.stop().catch(() => {});
     watchers.clear();
     await jobs.stop();
   };

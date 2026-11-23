@@ -4,6 +4,7 @@ import { PostgresSearchIndex, type SearchIndex } from "@mailmcp/search";
 import { AccountService } from "./accounts";
 import { BlobService } from "./blobs";
 import { Jobs } from "./jobs";
+import { MigrationService } from "./migrate";
 import { ConnectorPool } from "./pool";
 import { ModuleRegistry } from "./registry";
 import { SettingsService } from "./settings";
@@ -19,6 +20,7 @@ export interface Services {
   sync: SyncService;
   pool: ConnectorPool;
   jobs: Jobs;
+  migrations: MigrationService;
 }
 
 /** Wire up every core service. Used by both the server and the worker. */
@@ -37,6 +39,7 @@ export function createServices(opts: {
   const sync = new SyncService({ db: opts.db, accounts, settings, blobs, search });
   const pool = new ConnectorPool(accounts);
   const jobs = new Jobs(opts.databaseUrl);
+  const migrations = new MigrationService(opts.db, accounts, jobs);
 
   // Removing an account also removes its stored mail and live connections.
   accounts.onRemoved = async (row) => {
@@ -45,5 +48,16 @@ export function createServices(opts: {
     await store.deletePrefix(`${row.orgId}/${row.id}/`).catch(() => {});
   };
 
-  return { db: opts.db, registry, accounts, settings, blobs, search, sync, pool, jobs };
+  return {
+    db: opts.db,
+    registry,
+    accounts,
+    settings,
+    blobs,
+    search,
+    sync,
+    pool,
+    jobs,
+    migrations,
+  };
 }

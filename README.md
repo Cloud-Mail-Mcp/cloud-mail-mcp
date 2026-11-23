@@ -113,6 +113,26 @@ Or, for clients that only run local servers (`claude_desktop_config.json` style)
 Search syntax: free text plus `from:` `to:` `subject:"…"` `in:<folder>` `after:YYYY-MM-DD` `before:` `has:attachment` `is:unread` `is:flagged`.
 Prompts: `triage_inbox`, `summarize_thread`, `draft_reply`.
 
+## Moving to a new mail host
+
+Changing hosting providers? Add the address twice under **Accounts**, once with the old server's
+settings and once with the new one. MailMCP labels each login with its server name (you can
+rename the labels, e.g. "Old host" / "New host"). Then open **Migrations**:
+
+1. Pick the old account as **Copy from** and the new one as **Copy to**. **Preview folders**
+   shows where each folder will go (Inbox, Sent, Trash and so on are matched even when they're
+   named differently, and missing folders are created).
+2. Choose **Both ways** if mail may still arrive at the old server while DNS changes, and keep
+   **Keep copying new mail** on.
+3. **Start migration.** Every folder is copied with its read and flagged state. Messages already on
+   the other side are skipped (matched by Message-ID), and nothing is ever deleted, so it's safe
+   to run again. New mail is copied every couple of minutes
+   (`MIGRATION_INTERVAL_SECONDS`, default 120).
+4. When your MX records point to the new server and the old one has gone quiet, click **Finish**.
+
+If a password or server address changes later, update it on the account's page under **Login &
+server settings**. MailMCP tests the new settings before saving them.
+
 ## How it's built
 
 - **Postgres:** metadata, permissions, and the full-text search index. Shared tables keyed by account, benchmarked in [SPEC §4a](docs/SPEC.md).

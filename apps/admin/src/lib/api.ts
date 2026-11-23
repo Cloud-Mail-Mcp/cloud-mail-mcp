@@ -46,6 +46,8 @@ export interface AccountSummary {
   moduleId: string;
   address: string;
   displayName: string | null;
+  /** Tells two logins for the same address apart, e.g. "Old host". */
+  label: string | null;
   status: AccountStatus;
   statusMessage: string | null;
   lastSyncAt: string | null;
@@ -128,6 +130,7 @@ export interface MessageSummary {
   id: number;
   accountId: string;
   account: string;
+  accountLabel: string | null;
   threadId: number | null;
   folders: string[];
   subject: string | null;
@@ -273,3 +276,13 @@ export const shortDate = (iso: string) => {
 };
 
 export const addr = (a: EmailAddress | null | undefined) => (a ? a.name || a.email : "");
+
+/** How to name an account in the UI: its display name or address, plus its label. */
+export function accountName(a: {
+  address: string;
+  displayName?: string | null;
+  label?: string | null;
+}): string {
+  const base = a.displayName || a.address;
+  return a.label ? `${base} · ${a.label}` : base;
+}

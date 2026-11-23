@@ -58,6 +58,8 @@ export interface MessageSummary {
   id: number;
   accountId: string;
   account: string;
+  /** Set when the account has a label (e.g. two logins for one address). */
+  accountLabel: string | null;
   threadId: number | null;
   folders: string[];
   subject: string | null;
@@ -252,7 +254,7 @@ export class MailService {
   async hydrate(refs: Array<{ accountId: string; messageId: number }>): Promise<MessageSummary[]> {
     if (!refs.length) return [];
     const rows = (await this.db.execute(sql`
-      SELECT m.id, m.account_id, a.address AS account, m.thread_id, m.subject, m.from_name, m.from_email, m.date,
+      SELECT m.id, m.account_id, a.address AS account, a.label AS account_label, m.thread_id, m.subject, m.from_name, m.from_email, m.date,
              m.snippet, m.seen, m.flagged, m.answered, m.has_attachments,
              coalesce((SELECT array_agg(f.path ORDER BY f.path) FROM message_folders mf JOIN folders f ON f.id = mf.folder_id
                        WHERE mf.account_id = m.account_id AND mf.message_id = m.id), '{}') AS folders,
@@ -272,6 +274,7 @@ export class MailService {
         id: Number(r.id),
         accountId: r.account_id as string,
         account: r.account as string,
+        accountLabel: (r.account_label as string) ?? null,
         threadId: r.thread_id ? Number(r.thread_id) : null,
         folders: r.folders as string[],
         subject: (r.subject as string) ?? null,
@@ -300,6 +303,8 @@ export class MailService {
       .select({
         id: accounts.id,
         address: accounts.address,
+        /** Tells two logins for the same address apart (e.g. old and new host). */
+        label: accounts.label,
         displayName: accounts.displayName,
         status: accounts.status,
         instructions: accounts.instructions,

@@ -59,6 +59,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   It's included in the Assistant presets. Unsubscribing by email counts as sending, so it
   follows the agent's send policy and can wait for your approval.
 
+### Moving to a new mail host
+
+- New **Migrations** page: copy all mail from one account to another, for example the same
+  address on your old and new host. Every folder is copied (Inbox, Sent, Trash and the rest are
+  matched across servers even when named differently; missing folders are created), with read
+  and flagged state.
+- Messages already in the other account are skipped, and nothing is ever deleted, so it's safe to
+  run again. **Preview folders** shows the plan before you start.
+- Keeps copying new mail every couple of minutes until you click **Finish**, so nothing is lost
+  while DNS changes. Choose one way or **both ways**, reverse the direction, pause and resume.
+- The same address can be connected more than once with different logins (old and new server).
+  Each gets a **label** (the server name by default, editable), shown in Mail, Accounts,
+  Permissions and to AI agents.
+
+### Accounts
+
+- Changing a password or a mail server's address is easier to find: the account page's **Login &
+  server settings** (password, IMAP/SMTP server and ports, username), and a "Fix login" link and
+  banner when an account can't log in.
+- Settings are tested before saving. If the server is briefly unreachable you can **save without
+  testing**.
+- After a change, MailMCP syncs straight away and the new-mail listener reconnects with the new
+  settings (it used to stay on the old server).
+- **Accounts** moved down the menu, next to Settings.
+
 ### Install and updates
 
 - Install on shared hosting and hosting panels: Enhance, cPanel and other Node.js hosts, plus

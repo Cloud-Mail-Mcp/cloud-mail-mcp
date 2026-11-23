@@ -17,6 +17,7 @@ import {
   type AgentDetail,
   type AgentSummary,
   type ApiError,
+  accountName,
   api,
   type Grant,
   relTime,
@@ -424,7 +425,7 @@ function GrantEditor({
       >
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            {account.displayName ?? account.address}
+            {accountName(account)}
           </p>
           <p className="truncate text-xs text-zinc-500">
             {scopes.size === 0
@@ -754,7 +755,7 @@ export function PermissionsPage() {
                 <th className="px-4 py-2.5 font-medium">Agent</th>
                 {accounts.map((a) => (
                   <th key={a.id} className="px-4 py-2.5 font-medium normal-case">
-                    {a.displayName ?? a.address}
+                    {accountName(a)}
                   </th>
                 ))}
               </tr>

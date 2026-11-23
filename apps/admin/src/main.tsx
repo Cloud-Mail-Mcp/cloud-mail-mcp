@@ -13,6 +13,7 @@ import { LoginPage } from "./pages/Auth";
 import { ChatPage } from "./pages/Chat";
 import { ConnectPage } from "./pages/Connect";
 import { MailPage } from "./pages/Mail";
+import { MigrationsPage } from "./pages/Migrations";
 import { SettingsPage } from "./pages/Settings";
 import { SetupWizard } from "./pages/Setup";
 
@@ -62,6 +63,7 @@ function App() {
         <Route path="/permissions" component={PermissionsPage} />
         <Route path="/approvals" component={ApprovalsPage} />
         <Route path="/audit" component={AuditPage} />
+        <Route path="/migrations" component={MigrationsPage} />
         <Route>
           <Redirect to="/accounts" />
         </Route>

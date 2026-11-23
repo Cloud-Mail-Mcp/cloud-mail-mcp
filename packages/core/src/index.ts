@@ -9,6 +9,7 @@ export * from "./jobs";
 export * from "./logger";
 export * from "./mail";
 export * from "./masterkey";
+export * from "./migrate";
 export * from "./net";
 export * from "./oauth";
 export * from "./parse";
