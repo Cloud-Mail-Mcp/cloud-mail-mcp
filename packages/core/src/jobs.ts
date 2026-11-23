@@ -9,6 +9,12 @@ export const QUEUES = {
   migrate: "migrate-mail",
 } as const;
 
+/**
+ * Jobs report a heartbeat while they run (pg-boss does it for us). If the process running one
+ * dies, the job fails after this long instead of blocking its account/migration until it expires.
+ */
+const HEARTBEAT_SECONDS = 60;
+
 export interface SyncJob {
   accountId: string;
   full?: boolean;
@@ -54,6 +60,7 @@ export class Jobs {
     return this.boss.send(QUEUES.sync, job, {
       singletonKey: job.accountId,
       startAfter: opts.delaySeconds,
+      heartbeatSeconds: HEARTBEAT_SECONDS,
     });
   }
 
@@ -62,8 +69,36 @@ export class Jobs {
     return this.boss.send(
       QUEUES.migrate,
       { migrationId },
-      { singletonKey: migrationId, startAfter: opts.delaySeconds },
+      {
+        singletonKey: migrationId,
+        startAfter: opts.delaySeconds,
+        heartbeatSeconds: HEARTBEAT_SECONDS,
+      },
     );
+  }
+
+  /**
+   * Fail jobs still marked active from a process that stopped without finishing them (a
+   * restart or crash), so the account or migration isn't blocked until they expire. Call when
+   * the (single) worker starts, before it takes new jobs.
+   */
+  async failOrphaned(): Promise<number> {
+    await this.start();
+    let n = 0;
+    for (const name of [QUEUES.sync, QUEUES.migrate]) {
+      const active = (await this.boss.findJobs(name, { limit: 10_000 })).filter(
+        (j) => j.state === "active",
+      );
+      if (active.length) {
+        await this.boss.fail(
+          name,
+          active.map((j) => j.id),
+          { error: "Interrupted by a restart" },
+        );
+        n += active.length;
+      }
+    }
+    return n;
   }
 
   async stop() {

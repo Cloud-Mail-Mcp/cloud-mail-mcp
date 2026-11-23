@@ -69,6 +69,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   run again. **Preview folders** shows the plan before you start.
 - Keeps copying new mail every couple of minutes until you click **Finish**, so nothing is lost
   while DNS changes. Choose one way or **both ways**, reverse the direction, pause and resume.
+- Gmail: archived mail (only in "All Mail") is copied to **Archive**, skipping anything already
+  copied from another folder, so nothing is missed and nothing is duplicated. Gmail's
+  "Important" and "Starred" views are skipped.
+- A migration interrupted by a restart or crash picks up where it left off within a minute or
+  two, without copying anything twice.
 - The same address can be connected more than once with different logins (old and new server).
   Each gets a **label** (the server name by default, editable), shown in Mail, Accounts,
   Permissions and to AI agents.
@@ -83,6 +88,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - After a change, MailMCP syncs straight away and the new-mail listener reconnects with the new
   settings (it used to stay on the old server).
 - **Accounts** moved down the menu, next to Settings.
+- Fixed: after a restart or crash, an account's sync could be stuck for up to an hour.
+- Fixed: Gmail's "Important" folder was treated as an ordinary folder. On servers that don't
+  mark their special folders, "Trash", "Sent" and so on are now preferred over look-alikes
+  such as "Deleted Messages".
 - Choosing Gmail or iCloud when adding an account shows step-by-step instructions for creating
   an app password, with buttons that open the right Google or Apple page. The same steps appear
   on the account's settings page when its password needs replacing. Spaces in pasted Gmail app

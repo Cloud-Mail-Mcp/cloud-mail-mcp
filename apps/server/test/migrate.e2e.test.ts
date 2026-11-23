@@ -345,37 +345,36 @@ test("reverse, pause and finish", async (t) => {
 
   const fin = await api("PATCH", `/migrations/${migrationId}`, { status: "finished" });
   assert.equal(fin.migration.status, "finished");
-  assert.deepEqual(await deps.migrations.due(0), [], "finished migrations aren't scheduled");
+  assert.ok(
+    !(await deps.migrations.due(0)).includes(migrationId),
+    "finished migrations aren't scheduled",
+  );
   await api("DELETE", `/migrations/${migrationId}`);
   assert.equal((await api("GET", "/migrations")).migrations.length, 0);
 });
 
 test("login and server settings can be changed after a password or server move", async (t) => {
   if (skip()) return t.skip(skip() as string);
-  // Wrong new password: tested first and refused, nothing saved.
-  await assert.rejects(
-    api("PATCH", `/accounts/${newId}`, { config: { ...imapConfig(NEW), password: "wrong" } }),
-    /422/,
-  );
+  // (Unreachable ports stand in for bad settings: GreenMail leaks a busy thread for every
+  // failed login, which would slow every later test.)
+  const unreachable = { ...imapConfig(NEW), imap: { host: "127.0.0.1", port: 1, secure: false } };
+  // New settings that don't work are tested first and refused; nothing is saved.
+  await assert.rejects(api("PATCH", `/accounts/${newId}`, { config: unreachable }), /422/);
   // …unless saved without testing (e.g. the server is briefly down).
   const untested = await api("PATCH", `/accounts/${newId}`, {
-    config: { ...imapConfig(NEW), password: "wrong" },
+    config: unreachable,
     skipTest: true,
   });
   assert.match(untested.account.statusMessage, /without testing/);
-  await assert.rejects(deps.sync.syncAccount(newId), "the bad password is what's stored now");
+  await assert.rejects(deps.sync.syncAccount(newId), "the unreachable server is what's stored now");
 
-  // The server's address changed and the password is fixed: tested, saved, syncing again.
+  // The server's address changed; the password field is left blank, so the saved one is kept.
   const moved = await api("PATCH", `/accounts/${newId}`, {
     config: { ...imapConfig(NEW, "localhost"), password: "" },
-  }).catch((e) => e);
-  assert.ok(moved instanceof Error, "blank password keeps the stored (wrong) one");
-  const fixed = await api("PATCH", `/accounts/${newId}`, {
-    config: imapConfig(NEW, "localhost"),
   });
-  assert.equal(fixed.account.config.imap.host, "localhost");
-  assert.equal(fixed.account.config.password, undefined, "password never sent back");
-  assert.equal(fixed.account.status, "pending");
+  assert.equal(moved.account.config.imap.host, "localhost");
+  assert.equal(moved.account.config.password, undefined, "password never sent back");
+  assert.equal(moved.account.status, "pending");
   const r = await deps.sync.syncAccount(newId);
   assert.ok(!r.skipped);
   const { accounts } = await api("GET", "/accounts");

@@ -9,7 +9,15 @@ import { createLogger } from "./logger";
 type Logger = ReturnType<typeof createLogger>;
 
 /** Folders that are views of other folders (Gmail): copying them would duplicate mail. */
-const VIRTUAL_ROLES = new Set(["all", "important", "starred"]);
+const VIRTUAL_ROLES = new Set(["important", "starred"]);
+/** The same Gmail views by name, for servers that don't flag them. */
+const GMAIL_VIRTUAL = /^\[(gmail|google mail)\][/.](important|starred)$/i;
+/**
+ * Gmail's "All Mail" holds every message, including archived mail that's in no other folder.
+ * Only those are copied (to Archive), after everything else, so nothing is duplicated.
+ */
+const isAllMail = (f: RemoteFolder) =>
+  f.role === "all" || /^\[(gmail|google mail)\][/.]all mail$/i.test(f.path);
 /** Roles worth matching across servers whatever the folders are called. */
 const MATCH_ROLES = new Set(["inbox", "sent", "drafts", "trash", "spam", "archive"]);
 /** Messages copied per round trip. */
@@ -38,6 +46,8 @@ export interface FolderPlan {
   source: RemoteFolder;
   targetPath: string;
   targetExists: boolean;
+  /** Copy only messages that aren't anywhere else on the target (Gmail All Mail → Archive). */
+  archiveOnly?: boolean;
 }
 
 export class MigrationError extends Error {
@@ -78,13 +88,16 @@ export function planFolders(source: RemoteFolder[], target: RemoteFolder[]): Fol
   const plan: FolderPlan[] = [];
   const used = new Set<string>();
   for (const f of source) {
-    if (!f.selectable || (f.role && VIRTUAL_ROLES.has(f.role))) continue;
-    const roleMatch = f.role && MATCH_ROLES.has(f.role) ? byRole.get(f.role) : undefined;
+    if (!f.selectable || (f.role && VIRTUAL_ROLES.has(f.role)) || GMAIL_VIRTUAL.test(f.path))
+      continue;
+    const archiveOnly = isAllMail(f);
+    const role = archiveOnly ? "archive" : f.role;
+    const roleMatch = role && MATCH_ROLES.has(role) ? byRole.get(role) : undefined;
     let targetPath: string;
     if (roleMatch) targetPath = roleMatch.path;
     else {
       const srcSep = f.delimiter || "/";
-      let parts = f.path.split(srcSep).filter(Boolean);
+      let parts = archiveOnly ? ["Archive"] : f.path.split(srcSep).filter(Boolean);
       if (parts.length > 1 && parts[0]?.toUpperCase() === "INBOX") parts = parts.slice(1);
       if (parts.length > 1 && /^\[gmail\]$/i.test(parts[0] ?? "")) parts = parts.slice(1);
       parts = parts.map((p) => p.split(sep).join("-"));
@@ -99,9 +112,11 @@ export function planFolders(source: RemoteFolder[], target: RemoteFolder[]): Fol
       source: f,
       targetPath,
       targetExists: byPath.has(targetPath.toLowerCase()),
+      ...(archiveOnly ? { archiveOnly } : {}),
     });
   }
-  return plan;
+  // All Mail last: by then everything that's in a real folder is already on the target.
+  return [...plan.filter((p) => !p.archiveOnly), ...plan.filter((p) => p.archiveOnly)];
 }
 
 export class MigrationService {
@@ -157,6 +172,7 @@ export class MigrationService {
           source: p.source.path,
           target: p.targetPath,
           targetExists: p.targetExists,
+          archiveOnly: p.archiveOnly ?? false,
           messages: p.source.messageCount ?? null,
         }));
       return {
@@ -274,6 +290,14 @@ export class MigrationService {
     await this.jobs.enqueueMigration(id);
   }
 
+  /**
+   * Forget passes that were running when the process stopped (call once when the worker
+   * starts; MailMCP runs one worker).
+   */
+  async releaseAll() {
+    await this.db.update(migrations).set({ running: false }).where(eq(migrations.running, true));
+  }
+
   /** Active migrations that are due another pass (used by the worker's scheduler). */
   async due(everyMs: number): Promise<string[]> {
     const rows = await this.db
@@ -290,7 +314,7 @@ export class MigrationService {
     return rows
       .filter((r) => {
         const since = r.lastRunAt ? now - r.lastRunAt.getTime() : Number.POSITIVE_INFINITY;
-        if (r.running) return since > 30 * 60_000; // stale lease
+        if (r.running) return since > 5 * 60_000; // no heartbeat: the pass died
         // One-off copies retry after errors until their first pass completes.
         if (!r.continuous && r.initialDoneAt) return false;
         return since > everyMs;
@@ -337,7 +361,8 @@ export class MigrationService {
    * `more: true` when it stopped early and should continue right away. Never deletes.
    */
   async runPass(id: string, budgetMs = 4 * 60_000): Promise<{ more: boolean; copied: number }> {
-    // Take the lease (one pass at a time; a lease older than 30 minutes is considered stale).
+    // Take the lease: one pass at a time. A running pass refreshes lastRunAt after every batch,
+    // so a lease without a heartbeat for 5 minutes belongs to a pass that died.
     const [m] = await this.db
       .update(migrations)
       .set({ running: true, lastRunAt: new Date() })
@@ -345,7 +370,7 @@ export class MigrationService {
         and(
           eq(migrations.id, id),
           eq(migrations.status, "active"),
-          sql`(${migrations.running} = false OR ${migrations.lastRunAt} < now() - interval '30 minutes')`,
+          sql`(${migrations.running} = false OR ${migrations.lastRunAt} < now() - interval '5 minutes')`,
         ),
       )
       .returning();
@@ -359,7 +384,10 @@ export class MigrationService {
     const save = async () => {
       await this.db
         .update(migrations)
-        .set({ state: sql`${migrations.state} || ${JSON.stringify(state)}::jsonb` })
+        .set({
+          state: sql`${migrations.state} || ${JSON.stringify(state)}::jsonb`,
+          lastRunAt: new Date(), // heartbeat
+        })
         .where(eq(migrations.id, id));
     };
     const stillActive = async () => {
@@ -412,7 +440,12 @@ export class MigrationService {
               );
               dstByPath.set(p.targetPath.toLowerCase(), target);
             }
-            const r = await this.copyFolder(src, dst, p.source, target, st, deadline, save);
+            const r = await this.copyFolder(src, dst, p.source, target, st, deadline, save, {
+              // All Mail: skip anything already in any folder on the target.
+              compareWith: p.archiveOnly
+                ? [...dstByPath.values()].filter((f) => f.selectable)
+                : undefined,
+            });
             copied += r.copied;
             await save();
             if (r.more) {
@@ -463,6 +496,7 @@ export class MigrationService {
     st: FolderState,
     deadline: number,
     save: () => Promise<void>,
+    opts: { compareWith?: RemoteFolder[] } = {},
   ): Promise<{ copied: number; more: boolean }> {
     const inventory = src.inventory as NonNullable<Connector["inventory"]>;
     let inv = await inventory.call(src, folder, { afterUid: st.lastUid });
@@ -482,9 +516,10 @@ export class MigrationService {
     const oldest = Math.min(...inv.items.map((i) => i.date?.getTime() ?? 0));
     const since =
       st.lastUid > 0 && oldest > 0 ? new Date(oldest - 2 * 24 * 60 * 60_000) : undefined;
-    const have = new Set(
-      (await inventory.call(dst, target, since ? { since } : {})).items.map(messageKey),
-    );
+    const have = new Set<string>();
+    for (const f of opts.compareWith ?? [target])
+      for (const it of (await inventory.call(dst, f, since ? { since } : {})).items)
+        have.add(messageKey(it));
 
     let copied = 0;
     for (let i = 0; i < inv.items.length; i += BATCH) {

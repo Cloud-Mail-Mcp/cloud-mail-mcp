@@ -41,7 +41,7 @@ test("plain server → cPanel keeps the INBOX. prefix and reuses existing folder
   assert.deepEqual([existing.targetPath, existing.targetExists], ["INBOX.projects", true]);
 });
 
-test("Gmail: virtual folders skipped, [Gmail] prefix dropped, non-selectable skipped", () => {
+test("Gmail: All Mail → Archive (last), views skipped, [Gmail] prefix dropped", () => {
   const src = [
     f("INBOX", "/", "inbox"),
     f("[Gmail]", "/", undefined, false),
@@ -50,6 +50,7 @@ test("Gmail: virtual folders skipped, [Gmail] prefix dropped, non-selectable ski
     f("[Gmail]/Starred", "/", "starred"),
     f("[Gmail]/Sent Mail", "/", "sent"),
     f("[Gmail]/Notes", "/"),
+    f("[Gmail]/Important", "/"), // not flagged by every server: skipped by name too
     f("Receipts", "/"),
   ];
   const dst = [f("INBOX", "."), f("Sent", ".", "sent")];
@@ -58,7 +59,14 @@ test("Gmail: virtual folders skipped, [Gmail] prefix dropped, non-selectable ski
     "[Gmail]/Sent Mail": "Sent",
     "[Gmail]/Notes": "Notes",
     Receipts: "Receipts",
+    "[Gmail]/All Mail": "Archive",
   });
+  const plan = planFolders(src, dst);
+  assert.equal(plan.at(-1)?.source.path, "[Gmail]/All Mail", "All Mail goes last");
+  assert.equal(plan.at(-1)?.archiveOnly, true);
+  // An existing archive folder on the target is used.
+  const cp = planFolders(src, [f("INBOX", "."), f("INBOX.Archive", ".", "archive")]);
+  assert.equal(cp.at(-1)?.targetPath, "INBOX.Archive");
 });
 
 test("a target separator inside a source name doesn't create extra levels", () => {

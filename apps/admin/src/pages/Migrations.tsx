@@ -46,6 +46,7 @@ interface Preview {
     source: string;
     target: string;
     targetExists: boolean;
+    archiveOnly?: boolean;
     messages: number | null;
   }>;
   backward: Preview["forward"];
@@ -254,6 +255,11 @@ function PreviewTable({ title, rows }: { title: string; rows: Preview["forward"]
               <td className="px-3 py-1.5">
                 {r.target}
                 {!r.targetExists && <span className="ml-1.5 text-xs text-zinc-500">(new)</span>}
+                {r.archiveOnly && (
+                  <span className="block text-xs text-zinc-500">
+                    Only archived mail that isn't in another folder
+                  </span>
+                )}
               </td>
               <td className="px-3 py-1.5 text-right tabular-nums">
                 {r.messages === null ? "—" : fmt(r.messages)}

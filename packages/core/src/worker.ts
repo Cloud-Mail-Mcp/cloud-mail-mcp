@@ -22,6 +22,12 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
   const { db, jobs, sync, migrations } = svc;
   await jobs.start();
 
+  // Before taking any job: work interrupted by a restart or crash is unblocked so it
+  // starts again on the next tick.
+  const orphaned = await jobs.failOrphaned().catch(() => 0);
+  if (orphaned) log.info("cleared jobs interrupted by a restart", { count: orphaned });
+  await migrations.releaseAll().catch(() => {});
+
   const syncCfg = await svc.settings.get("sync");
   await jobs.boss.work<SyncJob>(
     QUEUES.sync,

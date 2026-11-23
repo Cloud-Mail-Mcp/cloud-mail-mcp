@@ -21,6 +21,7 @@ import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
 import type { ImapConfig } from "./config";
 import { chunk, FETCH_QUERY, toEnvelope, toFlags, uidSet } from "./envelope";
+import { assignNameRoles } from "./roles";
 
 const SPECIAL_USE: Record<string, FolderRole> = {
   "\\Inbox": "inbox",
@@ -33,16 +34,6 @@ const SPECIAL_USE: Record<string, FolderRole> = {
   "\\Important": "important",
   "\\Flagged": "starred",
 };
-
-/** Fallback role detection for servers without SPECIAL-USE (common on older cPanel). */
-const NAME_ROLES: Array<[RegExp, FolderRole]> = [
-  [/^(inbox)$/i, "inbox"],
-  [/(^|[./])(sent( items| messages| mail)?|gesendet|envoy[ée]s?)$/i, "sent"],
-  [/(^|[./])(drafts?|entw[üu]rfe|brouillons)$/i, "drafts"],
-  [/(^|[./])(trash|deleted( items| messages)?|bin|papierkorb|corbeille)$/i, "trash"],
-  [/(^|[./])(spam|junk( e-?mail)?|bulk mail)$/i, "spam"],
-  [/(^|[./])(archives?)$/i, "archive"],
-];
 
 interface ImapCursor extends SyncCursor {
   uidValidity: string;
@@ -162,9 +153,16 @@ export class ImapConnector implements Connector {
   async listFolders(): Promise<RemoteFolder[]> {
     const client = await this.imap();
     const list = await client.list({ statusQuery: { messages: true, unseen: true } });
-    const taken = new Set<FolderRole>();
+    const guessed = new Map<string, FolderRole | undefined>();
     const folders = list.map((f) => {
-      let role = f.specialUse ? SPECIAL_USE[f.specialUse] : undefined;
+      // Roles the server declares. imapflow reports standard special-use flags; Gmail also
+      // marks \Important (and sometimes \All / \Flagged) as plain flags, so check those too.
+      // imapflow's own guesses from folder names ("name") are only a fallback, below.
+      const declared = f.specialUse && f.specialUseSource !== "name" ? f.specialUse : undefined;
+      let role = declared ? SPECIAL_USE[declared] : undefined;
+      if (!role) for (const flag of f.flags) role ??= SPECIAL_USE[flag];
+      if (!role && f.specialUseSource === "name" && f.specialUse)
+        guessed.set(f.path, SPECIAL_USE[f.specialUse]);
       if (f.path.toUpperCase() === "INBOX") role = "inbox";
       return {
         remoteId: f.path,
@@ -177,14 +175,15 @@ export class ImapConnector implements Connector {
         unreadCount: f.status?.unseen,
       } satisfies RemoteFolder;
     });
-    for (const f of folders) if (f.role) taken.add(f.role);
-    // Name-based fallback, only for roles the server didn't declare.
+    // Name-based fallback, only for roles the server didn't declare: ours first (prefers
+    // "Trash" over "Deleted Messages"), then imapflow's (knows many languages).
+    assignNameRoles(folders);
+    const taken = new Set(folders.map((f) => f.role).filter(Boolean));
     for (const f of folders) {
-      if (f.role) continue;
-      const hit = NAME_ROLES.find(([re, role]) => !taken.has(role) && re.test(f.path));
-      if (hit) {
-        f.role = hit[1];
-        taken.add(hit[1]);
+      const g = guessed.get(f.path);
+      if (!f.role && g && !taken.has(g)) {
+        f.role = g;
+        taken.add(g);
       }
     }
     return folders;
