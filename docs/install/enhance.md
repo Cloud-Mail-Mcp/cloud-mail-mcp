@@ -42,7 +42,7 @@ Open the website → **Advanced** → **Node.js** → **Launch worker process**,
 | Port                           | `3000`. It must match `--port` in the startup command.  |
 | Allow web socket proxy upgrade | not needed (leave unchecked)                            |
 
-Click **Launch**. Enhance asks apps to listen on `0.0.0.0`, which is why the command includes `--host 0.0.0.0`; `npm start` alone would only listen on `127.0.0.1`. The app runs in automatic mode, so Enhance restarts it if it stops and after each new deploy.
+Click **Launch**. The **Startup command field is required**; if it's empty, nothing starts and the site shows a 404. Enhance's defaults (`npm start`, port `3000`) work as-is. The app runs in automatic mode, so Enhance restarts it if it stops and after each new deploy.
 
 ## 4. Connect the database and finish setup
 
@@ -77,7 +77,8 @@ With auto deploy on, publishing a new release updates the `dist` branch. Enhance
 
 - **"MailMCP needs Node.js 22.15 or newer"** in the log: choose a newer Node version in the Node.js app settings.
 - **"Port 3000 is already in use"**: choose another port in Enhance and use the same number in `--port`.
-- **502 / site unreachable:** make sure the startup command includes `--host 0.0.0.0` and the port numbers match.
+- **404 from LiteSpeed (the site serves files like `/README.md` but `/` is a 404):** the worker process isn't running. Launch it (step 3), and check that the startup command isn't empty.
+- **502 / site unreachable:** make sure the port in the worker process matches the app's port (3000 by default).
 - **Can't stay signed in:** open the site over `https://` (MailMCP marks login cookies secure when it listens on `0.0.0.0`).
 - **The site still shows Enhance's default page:** check that the Node.js app proxies the whole website and its startup mode is Automatic.
 - **Forgot the setup code:** restart the worker process in Enhance; a new code is written each time the installer starts.

@@ -91,7 +91,9 @@ writeFileSync(
       license: "AGPL-3.0-only",
       type: "module",
       main: "server.mjs",
-      scripts: { start: "node server.mjs" },
+      // `npm start` matches hosting panels' defaults (Enhance: "npm start", port 3000, listen on
+      // 0.0.0.0). PORT from the host still wins. Plain `node server.mjs` stays on 127.0.0.1:8787.
+      scripts: { start: "node server.mjs --host 0.0.0.0 --port ${PORT:-3000}" },
       engines: { node: ">=22.15" },
     },
     null,
