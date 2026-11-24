@@ -1,7 +1,10 @@
 import { fileURLToPath } from "node:url";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
-import { createDb } from "./index";
+
+/** Arbitrary key for the advisory lock that serializes test-database migrations. */
+const MIGRATE_LOCK = 7_310_241;
 
 /**
  * Integration tests run against their own database (`<name>_test`) so they never share data,
@@ -27,11 +30,17 @@ export async function prepareTestDatabase(
   }
   url.pathname = `/${name}`;
   const testUrl = url.toString();
-  const { db, close } = createDb(testUrl);
+  // Test suites run in parallel (one per package): take a lock so only one migrates at a time.
+  // On one connection, so the lock and the migration share a session.
+  const client = postgres(testUrl, { max: 1, onnotice: () => {} });
   try {
-    await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
+    await client`SELECT pg_advisory_lock(${MIGRATE_LOCK})`;
+    await migrate(drizzle(client), {
+      migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)),
+    });
   } finally {
-    await close();
+    await client`SELECT pg_advisory_unlock(${MIGRATE_LOCK})`.catch(() => {});
+    await client.end();
   }
   return testUrl;
 }
