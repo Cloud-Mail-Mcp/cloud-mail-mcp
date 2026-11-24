@@ -2,7 +2,9 @@ import type { Db } from "@mailmcp/db";
 import type { ModuleManifest } from "@mailmcp/module-sdk";
 import { PostgresSearchIndex, type SearchIndex } from "@mailmcp/search";
 import { AccountService } from "./accounts";
+import { AgentService } from "./agents";
 import { BlobService } from "./blobs";
+import { AccountDraftService } from "./drafts";
 import { Jobs } from "./jobs";
 import { MigrationService } from "./migrate";
 import { ConnectorPool } from "./pool";
@@ -21,6 +23,7 @@ export interface Services {
   pool: ConnectorPool;
   jobs: Jobs;
   migrations: MigrationService;
+  drafts: AccountDraftService;
 }
 
 /** Wire up every core service. Used by both the server and the worker. */
@@ -40,6 +43,14 @@ export function createServices(opts: {
   const pool = new ConnectorPool(accounts);
   const jobs = new Jobs(opts.databaseUrl);
   const migrations = new MigrationService(opts.db, accounts, jobs);
+  const drafts = new AccountDraftService(
+    opts.db,
+    registry,
+    accounts,
+    new AgentService(opts.db),
+    settings,
+    jobs,
+  );
 
   // Removing an account also removes its stored mail and live connections.
   accounts.onRemoved = async (row) => {
@@ -59,5 +70,6 @@ export function createServices(opts: {
     pool,
     jobs,
     migrations,
+    drafts,
   };
 }

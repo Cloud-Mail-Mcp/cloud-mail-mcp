@@ -67,6 +67,17 @@ export const settingDefs = {
     }),
     secretFields: [],
   },
+  /** What AI agents may do beyond their mailbox grants. */
+  agentAccounts: {
+    schema: z.object({
+      /**
+       * Agents allowed to add mailboxes may also send the password, and the mailbox is added
+       * right away. Off: they're added without it and wait for a person to enter it.
+       */
+      allowPasswords: z.boolean().default(false),
+    }),
+    secretFields: [],
+  },
   /** First-run wizard state. The wizard shows until `completedAt` is set. */
   setup: {
     schema: z.object({ completedAt: z.string().nullable().default(null) }),

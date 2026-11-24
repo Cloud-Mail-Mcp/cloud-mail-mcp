@@ -150,6 +150,7 @@ export class AccountService {
       label?: string;
       config: unknown;
     },
+    opts: { actorType?: "user" | "agent" } = {},
   ) {
     const manifest = this.registry.get(input.moduleId);
     const config = this.parseConfig(manifest, input.config);
@@ -217,7 +218,7 @@ export class AccountService {
     });
     await audit(this.db, {
       orgId,
-      actorType: "user",
+      actorType: opts.actorType ?? "user",
       actorId: userId,
       accountId: id,
       action: "account.create",

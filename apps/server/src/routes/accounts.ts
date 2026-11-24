@@ -20,10 +20,24 @@ const UpdateBody = z.object({
   skipTest: z.boolean().optional(),
 });
 const IdParams = z.object({ id: z.uuid() });
+const Mailbox = z.object({
+  address: z.string().trim().max(320),
+  displayName: z.string().max(100).optional(),
+  label: z.string().max(60).optional(),
+  provider: z.string().max(20).optional(),
+  imapHost: z.string().max(255).optional(),
+  imapPort: z.number().int().min(1).max(65535).optional(),
+  imapSecure: z.boolean().optional(),
+  smtpHost: z.string().max(255).optional(),
+  smtpPort: z.number().int().min(1).max(65535).optional(),
+  smtpSecure: z.boolean().optional(),
+  username: z.string().max(320).optional(),
+  password: z.string().max(1000).optional(),
+});
 
 export async function accountRoutes(
   app: FastifyInstance,
-  { db, registry, accounts, jobs, pool }: AppDeps,
+  { db, registry, accounts, jobs, pool, drafts }: AppDeps,
 ) {
   const auth = requireUser(db);
   const admin = [auth, requireRole("owner", "admin")];
@@ -35,6 +49,40 @@ export async function accountRoutes(
   app.get("/api/v1/accounts", { preHandler: auth }, async (req) => ({
     accounts: await accounts.list(req.user.orgId),
   }));
+
+  /**
+   * Add many mailboxes (spreadsheet import): rows with a password are tested and added, the rest
+   * wait for a password. The browser sends a few rows per request to show progress.
+   */
+  app.post("/api/v1/accounts/bulk", { preHandler: admin }, async (req) => {
+    const b = z.object({ mailboxes: z.array(Mailbox).min(1).max(50) }).parse(req.body);
+    return {
+      results: await drafts.add(req.user.orgId, { type: "user", id: req.user.id }, b.mailboxes),
+    };
+  });
+
+  /** Mailboxes waiting for a password (added by an agent or an import without passwords). */
+  app.get("/api/v1/accounts/drafts", { preHandler: auth }, async (req) => ({
+    drafts: await drafts.list(req.user.orgId),
+  }));
+
+  app.post("/api/v1/accounts/drafts/:id/complete", { preHandler: admin }, async (req, reply) => {
+    const { id } = IdParams.parse(req.params);
+    const b = z
+      .object({
+        password: z.string().min(1).max(1000),
+        access: z.enum(["none", "read", "assistant", "send_approval"]).nullable().optional(),
+      })
+      .parse(req.body);
+    reply.code(201);
+    return { account: await drafts.complete(req.user.orgId, req.user.id, id, b) };
+  });
+
+  app.delete("/api/v1/accounts/drafts/:id", { preHandler: admin }, async (req) => {
+    const { id } = IdParams.parse(req.params);
+    await drafts.remove(req.user.orgId, req.user.id, id);
+    return { ok: true };
+  });
 
   /** Try settings without saving. */
   app.post("/api/v1/accounts/test", { preHandler: admin }, async (req) => {

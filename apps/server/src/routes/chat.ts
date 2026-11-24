@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { AppDeps } from "../app";
 import { requireRole, requireUser } from "../auth";
 import { buildMcpServer } from "../mcp";
+import { baseUrl } from "./oauth";
 
 /**
  * In-app chat with Claude (Anthropic API key in Settings → Assistant). The chat runs as one of
@@ -59,7 +60,7 @@ export async function chatRoutes(app: FastifyInstance, d: AppDeps) {
 
     // The agent's tools, served in-process by the same MCP server external apps use.
     const access = await d.policy.forAgent(agent.orgId, agent.id, agent.name);
-    const mcpServer = buildMcpServer(access, d);
+    const mcpServer = buildMcpServer(access, d, { baseUrl: await baseUrl(d, req) });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await mcpServer.connect(serverSide);
     const mcp = new Client({ name: "mailmcp-chat", version: "1" });

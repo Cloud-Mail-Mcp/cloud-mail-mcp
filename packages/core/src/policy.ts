@@ -33,6 +33,8 @@ export interface Access {
   orgId: string;
   actor: { type: "user" | "agent"; id: string; name: string };
   grants: Map<string, AccountGrant>;
+  /** May add mailboxes (people always; agents when allowed on their page). */
+  canAddAccounts?: boolean;
 }
 
 export class AccessDenied extends Error {
@@ -115,6 +117,7 @@ export class PolicyService {
     };
     return {
       orgId: user.orgId,
+      canAddAccounts: true,
       actor: { type: "user", id: user.id, name: user.name ?? user.email },
       grants: new Map(rows.map((r) => [r.id, full])),
     };
@@ -159,8 +162,13 @@ export class PolicyService {
           or(isNull(grants.expiresAt), gt(grants.expiresAt, now)),
         ),
       );
+    const [flags] = await this.db
+      .select({ canAddAccounts: agents.canAddAccounts })
+      .from(agents)
+      .where(eq(agents.id, agentId));
     return {
       orgId,
+      canAddAccounts: flags?.canAddAccounts ?? false,
       actor: { type: "agent", id: agentId, name },
       grants: new Map(
         rows.map(({ grants: g }) => [

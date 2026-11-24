@@ -220,10 +220,25 @@ export interface AgentSummary {
   disabled: boolean;
   /** "oauth" = connected by signing in from the AI app; "api_key" = created here with a key. */
   kind: "api_key" | "oauth";
+  /** May add mailboxes (people enter the passwords unless Settings allow agents to). */
+  canAddAccounts: boolean;
   createdAt: string;
   keys: ApiKeyInfo[];
   accountCount: number;
   lastUsedAt: string | null;
+}
+
+/** A mailbox waiting for its password (added by an agent, or imported without one). */
+export interface AccountDraft {
+  id: string;
+  address: string;
+  displayName: string | null;
+  label: string | null;
+  config: { imap?: { host?: string }; username?: string };
+  access: "none" | "read" | "assistant" | "send_approval" | null;
+  agentId: string | null;
+  agentName: string | null;
+  createdAt: string;
 }
 
 export interface AgentDetail extends Omit<AgentSummary, "accountCount" | "lastUsedAt"> {

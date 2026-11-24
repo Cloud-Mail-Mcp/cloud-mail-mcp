@@ -304,6 +304,8 @@ export const agents = pgTable(
     kind: text("kind").notNull().default("api_key"),
     /** For OAuth agents: the app's client_id (a URL for CIMD clients). */
     oauthClientId: text("oauth_client_id"),
+    /** May add mailboxes (they wait for a person to enter the password, unless allowed). */
+    canAddAccounts: boolean("can_add_accounts").notNull().default(false),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
@@ -568,4 +570,30 @@ export const migrations = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("migrations_org_idx").on(t.orgId)],
+);
+
+/**
+ * Mailboxes waiting for their password: added by an agent (or a spreadsheet import without
+ * passwords). Holds no secrets; a person enters the password in the admin panel to finish.
+ */
+export const accountDrafts = pgTable(
+  "account_drafts",
+  {
+    id: id(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    moduleId: text("module_id").notNull(),
+    address: text("address").notNull(),
+    displayName: text("display_name"),
+    label: text("label"),
+    /** Connection settings without secrets (servers, ports, username). */
+    config: jsonb("config").notNull().default({}),
+    /** The agent that asked for it, and the access it asked for (a grant preset). */
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    access: text("access"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("account_drafts_org_idx").on(t.orgId)],
 );

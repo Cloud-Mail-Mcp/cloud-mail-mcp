@@ -450,6 +450,36 @@ export function MailCard() {
   );
 }
 
+/** What agents may do beyond their mailbox grants. */
+export function AgentAccountsCard() {
+  const s = useSetting("agentAccounts");
+  if (s.q.isLoading) return <Spinner />;
+  return (
+    <Card title="AI agents">
+      <div className="space-y-4">
+        <Checkbox
+          id="agentpw"
+          label="Agents that can add mailboxes may also send their passwords"
+          checked={getPath(s.draft, "allowPasswords") === true}
+          onChange={(v) => s.set("allowPasswords", v)}
+        />
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Off (recommended): agents add mailboxes without passwords, and you enter each password
+          under Accounts. On: an agent can add a mailbox in one step when you give it the password.
+          Passwords you share with an AI app stay in that app's chat history, so prefer Accounts →
+          Import from spreadsheet for many passwords: the file is read in your browser and never
+          goes to an AI.
+        </p>
+        {s.err && <Alert tone="error" title={s.err.message} />}
+        {s.saved && <Alert tone="success" title="Saved." />}
+        <Button busy={s.save.isPending} onClick={() => s.save.mutate()}>
+          Save
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   return (
     <>
@@ -459,6 +489,7 @@ export function SettingsPage() {
         <MailCard />
         <UpdatesCard />
         <AssistantCard />
+        <AgentAccountsCard />
         <StorageCard />
         <SyncCard />
         <SystemCard />

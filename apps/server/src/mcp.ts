@@ -5,6 +5,7 @@ import {
   AccountError,
   accountsWith,
   audit,
+  type GrantPreset,
   MailError,
   type MessageDetail,
   OAUTH_SCOPE,
@@ -57,7 +58,7 @@ function withUntrustedBody(m: MessageDetail) {
   };
 }
 
-export function buildMcpServer(access: Access, d: AppDeps) {
+export function buildMcpServer(access: Access, d: AppDeps, opts: { baseUrl?: string } = {}) {
   const server = new McpServer(
     { name: "mailmcp", version: "0.1.0" },
     { instructions: INSTRUCTIONS },
@@ -327,6 +328,113 @@ export function buildMcpServer(access: Access, d: AppDeps) {
     );
   }
 
+  // ─────────── adding mailboxes ───────────
+  if (access.canAddAccounts) {
+    const finishUrl = `${opts.baseUrl ?? ""}/admin/accounts`;
+    const Mailbox = z.object({
+      address: z.string().describe("The mailbox's email address."),
+      display_name: z.string().max(100).optional(),
+      label: z
+        .string()
+        .max(60)
+        .optional()
+        .describe('Tells logins for the same address apart, e.g. "Old host".'),
+      provider: z
+        .enum(["gmail", "icloud", "cpanel", "other"])
+        .optional()
+        .describe("Leave out to guess from the address (cPanel-style mail.<domain> otherwise)."),
+      imap_host: z.string().optional(),
+      imap_port: z.number().int().optional(),
+      imap_tls: z.boolean().optional().describe("Implicit TLS (port 993). false = STARTTLS."),
+      smtp_host: z.string().optional(),
+      smtp_port: z.number().int().optional(),
+      smtp_tls: z.boolean().optional().describe("Implicit TLS (port 465). false = STARTTLS (587)."),
+      username: z.string().optional().describe("Login username, if it isn't the address."),
+      password: z
+        .string()
+        .optional()
+        .describe(
+          "Only if the user gave it to you for this purpose. Used only when MailMCP's settings allow passwords from agents; otherwise the mailbox waits for the user to enter it.",
+        ),
+    });
+    server.registerTool(
+      "add_mailboxes",
+      {
+        title: "Add mailboxes",
+        description:
+          "Add email accounts to MailMCP, one or many (e.g. from a list the user gave you). Server settings are guessed from each address (Gmail, iCloud, otherwise cPanel-style mail.<domain>) unless given. Without a password a mailbox waits for the user to enter it in MailMCP (the result has the link to give them); with one, it's tested and added right away when the server allows passwords from agents. `access` is what you get on each new mailbox once it's added.",
+        inputSchema: {
+          mailboxes: z.array(Mailbox).min(1).max(200),
+          access: z
+            .enum(["none", "read", "assistant", "send_approval"])
+            .optional()
+            .describe(
+              "Your access to the new mailboxes: read only, assistant (read, organize, draft, unsubscribe) or send_approval (also send, each send approved by the user). Default: read.",
+            ),
+        },
+        annotations: { destructiveHint: false, openWorldHint: true },
+      },
+      tool(
+        "add_mailboxes",
+        async (a: { mailboxes: Array<z.infer<typeof Mailbox>>; access?: GrantPreset }) => {
+          const results = await d.drafts.add(
+            access.orgId,
+            { type: "agent", id: access.actor.id },
+            a.mailboxes.map((m) => ({
+              address: m.address,
+              displayName: m.display_name,
+              label: m.label,
+              provider: m.provider,
+              imapHost: m.imap_host,
+              imapPort: m.imap_port,
+              imapSecure: m.imap_tls,
+              smtpHost: m.smtp_host,
+              smtpPort: m.smtp_port,
+              smtpSecure: m.smtp_tls,
+              username: m.username,
+              password: m.password,
+            })),
+            { access: a.access ?? "read" },
+          );
+          const waiting = results.filter((r) => r.status === "waiting_for_password").length;
+          return json({
+            added: results.filter((r) => r.status === "added").length,
+            waiting_for_password: waiting,
+            failed: results.filter((r) => r.status === "error").length,
+            ...(waiting
+              ? {
+                  next_step: `Ask the user to open ${finishUrl} and enter the password for each mailbox under "Waiting for password". Passwords are typed there, never sent to you.`,
+                }
+              : {}),
+            results,
+          });
+        },
+      ),
+    );
+    server.registerTool(
+      "list_waiting_mailboxes",
+      {
+        title: "Mailboxes waiting for a password",
+        description:
+          "Mailboxes added with add_mailboxes that still need the user to enter their password.",
+        annotations: { readOnlyHint: true },
+      },
+      tool("list_waiting_mailboxes", async () => {
+        const drafts = await d.drafts.list(access.orgId);
+        return json({
+          finish_url: finishUrl,
+          mailboxes: drafts.map((x) => ({
+            address: x.address,
+            server: (x.config as { imap?: { host?: string } }).imap?.host ?? null,
+            label: x.label,
+            added_by: x.agentName,
+            since: x.createdAt,
+          })),
+        });
+      }),
+    );
+  }
+
   if (has("mail:unsubscribe")) {
     server.registerTool(
       "unsubscribe",
@@ -592,7 +700,7 @@ export async function mcpRoutes(app: FastifyInstance, d: AppDeps) {
           : "Sign in required. Add this URL as a connector in your AI app, or use an API key from MailMCP → Agents.",
       });
     }
-    const server = buildMcpServer(access, d);
+    const server = buildMcpServer(access, d, { baseUrl: base });
     // Stateless: a fresh server/transport per request, JSON responses (no session to keep).
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

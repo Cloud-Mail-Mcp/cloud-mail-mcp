@@ -12,6 +12,7 @@ import { AgentDetailPage, AgentsPage, PermissionsPage } from "./pages/Agents";
 import { LoginPage } from "./pages/Auth";
 import { ChatPage } from "./pages/Chat";
 import { ConnectPage } from "./pages/Connect";
+import { ImportPage } from "./pages/Import";
 import { MailPage } from "./pages/Mail";
 import { MigrationsPage } from "./pages/Migrations";
 import { SettingsPage } from "./pages/Settings";
@@ -54,6 +55,7 @@ function App() {
       <Switch>
         <Route path="/accounts" component={AccountsPage} />
         <Route path="/accounts/new" component={AddAccountPage} />
+        <Route path="/accounts/import" component={ImportPage} />
         <Route path="/accounts/:id">{(p) => <AccountDetailPage key={p.id} id={p.id} />}</Route>
         <Route path="/settings" component={SettingsPage} />
         <Route path="/mail" component={MailPage} />

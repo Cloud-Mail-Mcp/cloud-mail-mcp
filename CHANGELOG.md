@@ -80,6 +80,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Accounts
 
+- **Import from spreadsheet** (Accounts page): upload an Excel (.xlsx) or CSV file of mailboxes.
+  Columns like Email, Password, Name, Label, Username and IMAP/SMTP server are recognised; only
+  Email is required (servers are guessed: Gmail, iCloud, otherwise mail.yourdomain). Rows with a
+  password are tested and added; the rest wait for a password. The file is read in your browser,
+  so passwords never go through an AI.
+- **AI agents can add mailboxes** when you allow it on the agent's page (`add_mailboxes` tool),
+  for example from a list you give them. They're added without passwords and wait under
+  **Waiting for password** on the Accounts page, where you type each one in; you also choose
+  what access the agent gets. Settings → AI agents can let agents send passwords too (off by
+  default: passwords shared with an AI stay in its chat history).
+
 - Changing a password or a mail server's address is easier to find: the account page's **Login &
   server settings** (password, IMAP/SMTP server and ports, username), and a "Fix login" link and
   banner when an account can't log in.

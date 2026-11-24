@@ -132,7 +132,12 @@ export class AgentService {
     orgId: string,
     userId: string,
     id: string,
-    input: { name?: string; description?: string | null; disabled?: boolean },
+    input: {
+      name?: string;
+      description?: string | null;
+      disabled?: boolean;
+      canAddAccounts?: boolean;
+    },
   ) {
     await this.get(orgId, id);
     await this.db
@@ -141,6 +146,7 @@ export class AgentService {
         ...(input.name !== undefined && { name: input.name.trim() }),
         ...(input.description !== undefined && { description: input.description?.trim() || null }),
         ...(input.disabled !== undefined && { disabled: input.disabled }),
+        ...(input.canAddAccounts !== undefined && { canAddAccounts: input.canAddAccounts }),
       })
       .where(eq(agents.id, id));
     await audit(this.db, {
@@ -196,7 +202,13 @@ export class AgentService {
   }
 
   /** Replace an agent's grant on one account (empty scopes = remove access). */
-  async setGrant(orgId: string, userId: string, agentId: string, input: GrantInput) {
+  async setGrant(
+    orgId: string,
+    userId: string,
+    agentId: string,
+    input: GrantInput,
+    actorType: "user" | "agent" = "user",
+  ) {
     await this.get(orgId, agentId);
     const [acc] = await this.db
       .select({ id: accounts.id })
@@ -210,7 +222,7 @@ export class AgentService {
         .where(and(eq(grants.agentId, agentId), eq(grants.accountId, input.accountId)));
       await audit(this.db, {
         orgId,
-        actorType: "user",
+        actorType,
         actorId: userId,
         accountId: input.accountId,
         action: "grant.remove",
@@ -236,7 +248,7 @@ export class AgentService {
       .returning();
     await audit(this.db, {
       orgId,
-      actorType: "user",
+      actorType,
       actorId: userId,
       accountId: input.accountId,
       action: "grant.set",

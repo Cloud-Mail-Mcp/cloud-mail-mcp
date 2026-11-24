@@ -43,6 +43,13 @@
       "when": 1795461325383,
       "tag": "0005_lumpy_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795483310974,
+      "tag": "0006_living_tyrannus",
+      "breakpoints": true
     }
   ]
 }

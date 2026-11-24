@@ -578,6 +578,11 @@ export function AgentDetailPage({ id }: { id: string }) {
       api(`/agents/${id}`, { method: "PATCH", body: { disabled } }),
     onSuccess: refresh,
   });
+  const canAdd = useMutation({
+    mutationFn: (canAddAccounts: boolean) =>
+      api(`/agents/${id}`, { method: "PATCH", body: { canAddAccounts } }),
+    onSuccess: refresh,
+  });
   const remove = useMutation({
     mutationFn: () => api(`/agents/${id}`, { method: "DELETE" }),
     onSuccess: async () => {
@@ -617,6 +622,23 @@ export function AgentDetailPage({ id }: { id: string }) {
       />
       <div className="space-y-6">
         {newKey && <KeyReveal apiKey={newKey} onDone={() => setNewKey(null)} />}
+
+        <Card title="Adding mailboxes">
+          <div className="space-y-2">
+            <Checkbox
+              id="can-add"
+              label="Can add mailboxes"
+              checked={agent.canAddAccounts}
+              onChange={(v) => canAdd.mutate(v)}
+            />
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Lets this agent add email accounts, for example from a list you give it (its{" "}
+              <code>add_mailboxes</code> tool). New mailboxes wait under Accounts → Waiting for
+              password until you enter the password, unless Settings → AI agents allows agents to
+              send passwords.
+            </p>
+          </div>
+        </Card>
 
         <Card title="Mailbox access">
           <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">

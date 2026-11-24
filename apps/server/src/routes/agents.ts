@@ -55,6 +55,7 @@ export async function agentRoutes(app: FastifyInstance, d: AppDeps) {
         name: z.string().trim().min(1).max(100).optional(),
         description: z.string().max(500).nullable().optional(),
         disabled: z.boolean().optional(),
+        canAddAccounts: z.boolean().optional(),
       })
       .parse(req.body);
     return { agent: await d.agents.update(req.user.orgId, req.user.id, id, b) };

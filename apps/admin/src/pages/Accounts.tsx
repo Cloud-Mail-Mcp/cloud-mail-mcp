@@ -16,6 +16,7 @@ import {
 } from "../components/ui";
 import {
   type AccountDetail,
+  type AccountDraft,
   type AccountSummary,
   type ApiError,
   api,
@@ -32,6 +33,141 @@ const useModules = () =>
   });
 
 // ───────────────────────────── List ─────────────────────────────
+
+const ACCESS_LABELS: Record<string, string> = {
+  none: "No access",
+  read: "Read only",
+  assistant: "Read, organize, draft & unsubscribe",
+  send_approval: "…and send with my approval",
+};
+
+/** Mailboxes added by an agent or an import without passwords: enter each password to finish. */
+function WaitingForPassword() {
+  const q = useQuery({
+    queryKey: ["drafts"],
+    queryFn: () => api<{ drafts: AccountDraft[] }>("/accounts/drafts"),
+    refetchInterval: 15_000,
+  });
+  const drafts = q.data?.drafts ?? [];
+  if (!drafts.length) return null;
+  return (
+    <Card
+      className="mb-6"
+      title={
+        <span id="waiting">
+          Waiting for password <span className="font-normal text-zinc-500">· {drafts.length}</span>
+        </span>
+      }
+    >
+      <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+        These mailboxes were added without a password. Enter each one here; MailMCP tests it and
+        adds the mailbox. Passwords typed here are never shown to agents.
+      </p>
+      <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {drafts.map((d) => (
+          <DraftRow key={d.id} draft={d} />
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function DraftRow({ draft: d }: { draft: AccountDraft }) {
+  const qc = useQueryClient();
+  const [password, setPassword] = useState("");
+  const [access, setAccess] = useState<string>(d.access ?? "none");
+  const [err, setErr] = useState<ApiError | null>(null);
+  const refresh = async () => {
+    await qc.invalidateQueries({ queryKey: ["drafts"] });
+    await qc.invalidateQueries({ queryKey: ["accounts"] });
+  };
+  const add = useMutation({
+    mutationFn: () =>
+      api(`/accounts/drafts/${d.id}/complete`, {
+        method: "POST",
+        body: { password, ...(d.agentId ? { access } : {}) },
+      }),
+    onMutate: () => setErr(null),
+    onSuccess: refresh,
+    onError: (e) => setErr(e as ApiError),
+  });
+  const remove = useMutation({
+    mutationFn: () => api(`/accounts/drafts/${d.id}`, { method: "DELETE" }),
+    onSuccess: refresh,
+  });
+  const pwId = `pw-${d.id}`;
+  return (
+    <li className="py-3">
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (password) add.mutate();
+        }}
+      >
+        <div className="min-w-56 flex-1">
+          <p className="font-mono text-[13px] text-zinc-900 dark:text-zinc-100">
+            {d.address}
+            {d.label && <span className="ml-2 font-sans text-zinc-500">· {d.label}</span>}
+          </p>
+          <p className="text-xs text-zinc-500">
+            {d.config.imap?.host ?? "?"}
+            {d.agentName ? ` · added by ${d.agentName}` : ""}
+          </p>
+        </div>
+        {d.agentId && (
+          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+            {d.agentName ?? "Agent"} gets
+            <select
+              value={access}
+              onChange={(e) => setAccess(e.target.value)}
+              className="rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            >
+              {Object.entries(ACCESS_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label
+          htmlFor={pwId}
+          className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400"
+        >
+          Password
+          <Input
+            id={pwId}
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-56"
+          />
+        </label>
+        <Button type="submit" busy={add.isPending} disabled={!password}>
+          Test &amp; add
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={remove.isPending}
+          onClick={() => remove.mutate()}
+          aria-label={`Remove ${d.address} from the waiting list`}
+        >
+          Remove
+        </Button>
+      </form>
+      {err && (
+        <div className="mt-2">
+          <Alert tone="error" title={err.message}>
+            {err.hint}
+          </Alert>
+        </div>
+      )}
+    </li>
+  );
+}
 
 export function AccountsPage() {
   const q = useQuery({
@@ -58,14 +194,23 @@ export function AccountsPage() {
             : "Connect the mailboxes MailMCP should index and make available to agents."
         }
         actions={
-          <Link
-            href="/accounts/new"
-            className="rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Add account
-          </Link>
+          <>
+            <Link
+              href="/accounts/import"
+              className="rounded-md border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Import from spreadsheet
+            </Link>
+            <Link
+              href="/accounts/new"
+              className="rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Add account
+            </Link>
+          </>
         }
       />
+      <WaitingForPassword />
       {q.isLoading ? (
         <Spinner />
       ) : q.error ? (
