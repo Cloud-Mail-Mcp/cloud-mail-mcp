@@ -181,7 +181,7 @@ test("added without a password: waits for a person, who enters it", { skip }, as
 });
 
 test("with passwords allowed, an agent adds a mailbox in one step", { skip }, async () => {
-  await api("PUT", "/settings/agentAccounts", { value: { allowPasswords: true } });
+  await api("PUT", "/settings/agentAccounts", { allowPasswords: true });
   const client = await mcp();
   const added = await call(client, "add_mailboxes", {
     mailboxes: [{ address: DAVE.user, password: DAVE.pass, ...servers }],
@@ -203,7 +203,7 @@ test("with passwords allowed, an agent adds a mailbox in one step", { skip }, as
     "recorded as added by the agent",
   );
   await client.close();
-  await api("PUT", "/settings/agentAccounts", { value: { allowPasswords: false } });
+  await api("PUT", "/settings/agentAccounts", { allowPasswords: false });
 });
 
 test("spreadsheet import endpoint: bad rows and duplicates are reported per row", {
