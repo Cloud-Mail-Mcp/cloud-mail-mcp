@@ -110,6 +110,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - After a change, MailMCP syncs straight away and the new-mail listener reconnects with the new
   settings (it used to stay on the old server).
 - **Accounts** moved down the menu, next to Settings.
+- The Accounts list sorts by name, domain (new column), status, messages or unread: click a
+  column title, click again to reverse. Your choice is remembered.
 - Fixed: after a restart or crash, an account's sync could be stuck for up to an hour.
 - Fixed: Gmail's "Important" folder was treated as an ordinary folder. On servers that don't
   mark their special folders, "Trash", "Sent" and so on are now preferred over look-alikes

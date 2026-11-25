@@ -169,6 +169,76 @@ function DraftRow({ draft: d }: { draft: AccountDraft }) {
   );
 }
 
+type SortKey = "name" | "domain" | "status" | "messages" | "unread";
+type Sort = { key: SortKey; dir: "asc" | "desc" };
+const SORT_STORE = "mailmcp.accountsSort";
+const nameOf = (a: AccountSummary) => (a.displayName || a.address).toLowerCase();
+const domainOf = (a: AccountSummary) => a.address.split("@")[1]?.toLowerCase() ?? "";
+
+function sortAccounts(list: AccountSummary[], { key, dir }: Sort) {
+  const byName = (a: AccountSummary, b: AccountSummary) =>
+    nameOf(a).localeCompare(nameOf(b)) ||
+    a.address.localeCompare(b.address) ||
+    (a.label ?? "").localeCompare(b.label ?? "");
+  const cmp: Record<SortKey, (a: AccountSummary, b: AccountSummary) => number> = {
+    name: byName,
+    domain: (a, b) => domainOf(a).localeCompare(domainOf(b)),
+    status: (a, b) => a.status.localeCompare(b.status),
+    messages: (a, b) => a.messageCount - b.messageCount,
+    unread: (a, b) => a.unreadCount - b.unreadCount,
+  };
+  const sign = dir === "asc" ? 1 : -1;
+  // Ties (same domain, same count…) fall back to the name, always A→Z.
+  return [...list].sort((a, b) => sign * cmp[key](a, b) || byName(a, b));
+}
+
+function loadSort(): Sort {
+  try {
+    const v = JSON.parse(localStorage.getItem(SORT_STORE) ?? "null");
+    if (v && ["name", "domain", "status", "messages", "unread"].includes(v.key))
+      return { key: v.key, dir: v.dir === "desc" ? "desc" : "asc" };
+  } catch {}
+  return { key: "name", dir: "asc" };
+}
+
+/** A column header that sorts the table; clicking it again reverses the order. */
+function SortHeader({
+  k,
+  sort,
+  onSort,
+  align = "left",
+  className = "",
+  children,
+}: {
+  k: SortKey;
+  sort: Sort;
+  onSort: (k: SortKey) => void;
+  align?: "left" | "right";
+  className?: string;
+  children: ReactNode;
+}) {
+  const active = sort.key === k;
+  return (
+    <th
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      className={`px-4 py-2.5 font-medium ${align === "right" ? "text-right" : ""} ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`inline-flex items-center gap-1 uppercase tracking-wide hover:text-zinc-900 dark:hover:text-zinc-100 ${
+          active ? "text-zinc-900 dark:text-zinc-100" : ""
+        }`}
+      >
+        {children}
+        <span aria-hidden="true" className={active ? "" : "invisible"}>
+          {sort.dir === "asc" ? "↑" : "↓"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export function AccountsPage() {
   const q = useQuery({
     queryKey: ["accounts"],
@@ -179,6 +249,19 @@ export function AccountsPage() {
         : false,
   });
   const accounts = q.data?.accounts ?? [];
+  const [sort, setSort] = useState<Sort>(loadSort);
+  const onSort = (key: SortKey) => {
+    // Names and domains start A→Z; counts start with the biggest.
+    const next: Sort =
+      sort.key === key
+        ? { key, dir: sort.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "messages" || key === "unread" ? "desc" : "asc" };
+    setSort(next);
+    try {
+      localStorage.setItem(SORT_STORE, JSON.stringify(next));
+    } catch {}
+  };
+  const sorted = useMemo(() => sortAccounts(accounts, sort), [accounts, sort]);
   const totals = accounts.reduce(
     (t, a) => ({ messages: t.messages + a.messageCount, unread: t.unread + a.unreadCount }),
     { messages: 0, unread: 0 },
@@ -237,15 +320,32 @@ export function AccountsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Account</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
+                <SortHeader k="name" sort={sort} onSort={onSort}>
+                  Account
+                </SortHeader>
+                <SortHeader k="domain" sort={sort} onSort={onSort} className="hidden md:table-cell">
+                  Domain
+                </SortHeader>
+                <SortHeader k="status" sort={sort} onSort={onSort}>
+                  Status
+                </SortHeader>
                 <th className="hidden px-4 py-2.5 text-right font-medium sm:table-cell">Folders</th>
-                <th className="px-4 py-2.5 text-right font-medium">Messages</th>
-                <th className="hidden px-4 py-2.5 text-right font-medium sm:table-cell">Unread</th>
+                <SortHeader k="messages" sort={sort} onSort={onSort} align="right">
+                  Messages
+                </SortHeader>
+                <SortHeader
+                  k="unread"
+                  sort={sort}
+                  onSort={onSort}
+                  align="right"
+                  className="hidden sm:table-cell"
+                >
+                  Unread
+                </SortHeader>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {accounts.map((a) => (
+              {sorted.map((a) => (
                 <tr key={a.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                   <td className="px-4 py-3">
                     <Link
@@ -260,6 +360,9 @@ export function AccountsPage() {
                       </span>
                     )}
                     {a.displayName && <p className="text-xs text-zinc-500">{a.address}</p>}
+                  </td>
+                  <td className="hidden px-4 py-3 text-zinc-600 md:table-cell dark:text-zinc-400">
+                    {domainOf(a)}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={a.status} />
