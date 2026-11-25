@@ -5,12 +5,17 @@ export function friendlyError(err: unknown): { message: string; hint?: string; c
     message?: string;
     responseText?: string;
     authenticationFailed?: boolean;
-    response?: string;
+    /** A string from SMTP; IMAP (imapflow) puts the parsed server reply object here. */
+    response?: unknown;
     responseCode?: number;
     command?: string;
+    /** IMAP: the command the server rejected, with literals masked by imapflow. */
+    executedCommand?: string;
     host?: string;
   };
-  const raw = [e.message, e.responseText, e.response].filter(Boolean).join(" — ");
+  const raw = [e.message, e.responseText, typeof e.response === "string" ? e.response : undefined]
+    .filter(Boolean)
+    .join(" — ");
   const code = e.code;
 
   if (
@@ -72,5 +77,10 @@ export function friendlyError(err: unknown): { message: string; hint?: string; c
       hint: "Port 993/465 need TLS on; 143/587 need TLS off (STARTTLS).",
     };
   }
-  return { code: code ?? "UNKNOWN", message: raw || "Connection failed." };
+  // Name the IMAP command the server refused (without its tag), so the problem can be traced.
+  const cmd = e.executedCommand?.replace(/^\S+\s+/, "").slice(0, 160);
+  return {
+    code: code ?? "UNKNOWN",
+    message: `${raw || "Connection failed."}${cmd ? ` (command: ${cmd})` : ""}`,
+  };
 }
