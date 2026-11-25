@@ -9,6 +9,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+**Highlights**
+
+- **Connect Claude, ChatGPT and other AI apps by signing in**: no API keys to copy, and you
+  choose each app's mailboxes and permissions.
+- **Chat with Claude inside MailMCP**, with the same permissions and approvals as your agents.
+- **Move to a new mail host**: copy every folder between accounts and keep them in sync until
+  your DNS switches over.
+- **Add many mailboxes at once** from an Excel or CSV file, or let an AI agent add them for you
+  to finish with the passwords.
+- **Unsubscribe** from newsletters in one click, for you and your agents.
+- **Faster mail view**: select many messages at once, keyboard shortcuts, an unread filter, and
+  folding account lists.
+- **Install on shared hosting**: Enhance, cPanel, Easypanel, Coolify, CapRover and Dokploy.
+
 ### Connect AI apps by signing in
 
 - Paste your server's `/mcp` URL into Claude (Settings → Connectors → Add custom connector),
