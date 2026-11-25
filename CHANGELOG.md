@@ -121,6 +121,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   social media emails" or "reply 'not interested' to every solicitation" (replies follow the
   agent's send policy).
 - Tags stay with a message when it's moved to another folder.
+- AI sorting can be switched off per mailbox (Spam & sorting → Mailboxes), e.g. for a shared or
+  low-volume mailbox. Blocked senders still apply.
+- **AI usage and cost** (Settings): tokens and estimated cost of AI sorting and Chat, today and
+  over the last 7, 30 or 90 days, per model and per day, from Anthropic's list prices. Each Chat
+  answer shows its tokens and cost, and Spam & sorting shows today's cost.
 
 ### Moving to a new mail host
 
@@ -173,6 +178,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Accounts list sorts by name, domain (new column), status, messages or unread: click a
   column title, click again to reverse. Your choice is remembered.
 - Fixed: after a restart or crash, an account's sync could be stuck for up to an hour.
+- Fixed: Gmail accounts could fail to sync with "Could not parse command" when a folder with no
+  saved mail changed on the server. Errors from mail servers now name the command they
+  rejected instead of showing "[object Object]".
 - Fixed: Gmail's "Important" folder was treated as an ordinary folder. On servers that don't
   mark their special folders, "Trash", "Sent" and so on are now preferred over look-alikes
   such as "Deleted Messages".

@@ -57,6 +57,13 @@
       "when": 1795575081285,
       "tag": "0007_outstanding_loki",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795585098816,
+      "tag": "0008_bouncy_glorian",
+      "breakpoints": true
     }
   ]
 }

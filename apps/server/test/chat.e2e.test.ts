@@ -205,9 +205,16 @@ test("chat: off until a key is saved; then streams tool calls and the answer", {
   const types = events.map((e) => e.type);
   assert.deepEqual(
     types.filter((t) => t !== "text"),
-    ["tool", "tool_result", "done"],
+    ["tool", "tool_result", "usage", "done"],
     JSON.stringify(events),
   );
+  // Each answer reports its tokens and estimated cost; Settings → AI usage keeps the totals.
+  const usage = events.find((e) => e.type === "usage");
+  assert.ok(usage.tokens > 0 && usage.costUsd > 0);
+  const { rows } = await api("GET", "/ai/usage?days=1");
+  const chat = rows.find((r: { feature: string }) => r.feature === "chat");
+  assert.equal(chat.model, "claude-opus-5-5");
+  assert.ok(chat.requests >= 2 && chat.costUsd > 0);
   assert.equal(events.find((e) => e.type === "tool_result").isError, false);
   const text = events
     .filter((e) => e.type === "text")

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { costMicros, recordAiUsage } from "@cloud-mail-mcp/core";
 import { agents, and, eq } from "@cloud-mail-mcp/db";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -91,6 +92,8 @@ export async function chatRoutes(app: FastifyInstance, d: AppDeps) {
       { role: "user", content: b.text },
     ];
 
+    let turnCost = 0;
+    let turnTokens = 0;
     try {
       let retries = 0;
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -127,6 +130,14 @@ export async function chatRoutes(app: FastifyInstance, d: AppDeps) {
         }
 
         messages.push({ role: "assistant", content: message.content });
+        // Tokens and estimated cost (Settings → AI usage), per call and for this answer.
+        await recordAiUsage(d.db, {
+          feature: "chat",
+          model: message.model,
+          usage: message.usage,
+        }).catch(() => {});
+        turnCost += costMicros(message.model, message.usage) ?? 0;
+        turnTokens += message.usage.input_tokens + message.usage.output_tokens;
 
         if (message.stop_reason === "refusal") {
           send({ type: "notice", text: "Claude declined to continue this request." });
@@ -174,6 +185,7 @@ export async function chatRoutes(app: FastifyInstance, d: AppDeps) {
         if (round === MAX_TOOL_ROUNDS - 1)
           send({ type: "notice", text: "Stopped after many steps. Ask again to continue." });
       }
+      send({ type: "usage", tokens: turnTokens, costUsd: turnCost / 1_000_000 });
       send({ type: "done", history: messages });
     } catch (err) {
       if (!abort.signal.aborted) {

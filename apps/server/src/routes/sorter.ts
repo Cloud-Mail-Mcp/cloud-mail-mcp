@@ -1,4 +1,5 @@
-import { accounts, and, desc, eq, senderRules, sorterExamples } from "@cloud-mail-mcp/db";
+import { aiUsageSince, PRICES_AS_OF } from "@cloud-mail-mcp/core";
+import { accounts, and, desc, eq, senderRules, sorterExamples, sql } from "@cloud-mail-mcp/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";
@@ -28,6 +29,64 @@ export async function sorterRoutes(app: FastifyInstance, d: AppDeps) {
       .where(eq(accounts.orgId, req.user.orgId));
     for (const a of rows) await d.jobs.enqueueSort(a.id).catch(() => {});
     return { backfillFrom: from, accounts: rows.length };
+  });
+
+  /** Each mailbox and whether the AI sorter tags its mail (on unless switched off). */
+  app.get("/api/v1/sorter/accounts", { preHandler: auth }, async (req) => ({
+    accounts: (
+      await d.db
+        .select({
+          id: accounts.id,
+          address: accounts.address,
+          label: accounts.label,
+          settings: accounts.settings,
+        })
+        .from(accounts)
+        .where(eq(accounts.orgId, req.user.orgId))
+        .orderBy(accounts.address)
+    ).map((a) => ({
+      id: a.id,
+      address: a.address,
+      label: a.label,
+      aiSorting: (a.settings as { aiSorting?: boolean } | null)?.aiSorting !== false,
+    })),
+  }));
+
+  app.put("/api/v1/sorter/accounts/:id", { preHandler: admin }, async (req) => {
+    const { id } = IdParams.parse(req.params);
+    const { aiSorting } = z.object({ aiSorting: z.boolean() }).parse(req.body);
+    await d.db
+      .update(accounts)
+      .set({
+        settings: sql`${accounts.settings} || ${JSON.stringify({ aiSorting })}::jsonb`,
+      })
+      .where(and(eq(accounts.orgId, req.user.orgId), eq(accounts.id, id)));
+    return { id, aiSorting };
+  });
+
+  /** Anthropic API usage and estimated cost (AI sorting and Chat), per day, feature and model. */
+  app.get("/api/v1/ai/usage", { preHandler: auth }, async (req) => {
+    const { days } = z
+      .object({ days: z.coerce.number().int().min(1).max(366).default(30) })
+      .parse(req.query);
+    const rows = await aiUsageSince(d.db, days);
+    return {
+      pricesAsOf: PRICES_AS_OF,
+      days,
+      rows: rows.map((r) => ({
+        day: r.day,
+        feature: r.feature,
+        model: r.model,
+        requests: r.requests,
+        messages: r.messages,
+        inputTokens: Number(r.inputTokens),
+        outputTokens: Number(r.outputTokens),
+        cacheReadTokens: Number(r.cacheReadTokens),
+        cacheWriteTokens: Number(r.cacheWriteTokens),
+        costUsd: Number(r.costMicros) / 1_000_000,
+        errors: r.errors,
+      })),
+    };
   });
 
   app.get("/api/v1/sorter/senders", { preHandler: auth }, async (req) => ({

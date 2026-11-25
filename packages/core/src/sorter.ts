@@ -17,6 +17,7 @@ import {
 import type { Logger } from "@cloud-mail-mcp/module-sdk";
 import { z } from "zod";
 import type { AccountRow, AccountService } from "./accounts";
+import { recordAiUsage, sortedToday } from "./ai-usage";
 import type { MessageChecks } from "./checks";
 import type { MailService } from "./mail";
 import type { Access } from "./policy";
@@ -106,20 +107,26 @@ export class SorterService {
     return this.deps.db;
   }
 
-  /** Usage today and the latest error, for Settings. */
+  /** The sorter's usage today (all models) and its latest error, for the Spam & sorting page. */
   async status() {
-    const [u] = await this.db.select().from(aiUsage).where(eq(aiUsage.day, today()));
+    const rows = await this.db
+      .select()
+      .from(aiUsage)
+      .where(and(eq(aiUsage.day, today()), eq(aiUsage.feature, "sorter")));
     const s = await this.deps.settings.get("sorter");
     const a = await this.deps.settings.get("assistant");
+    const sum = (k: "messages" | "inputTokens" | "outputTokens" | "costMicros" | "errors") =>
+      rows.reduce((n, r) => n + Number(r[k]), 0);
     return {
       enabled: s.enabled,
       hasApiKey: !!a.apiKey,
       today: {
-        messages: u?.messages ?? 0,
-        inputTokens: u?.inputTokens ?? 0,
-        outputTokens: u?.outputTokens ?? 0,
-        errors: u?.errors ?? 0,
-        lastError: u?.lastError ?? null,
+        messages: sum("messages"),
+        inputTokens: sum("inputTokens"),
+        outputTokens: sum("outputTokens"),
+        costUsd: sum("costMicros") / 1_000_000,
+        errors: sum("errors"),
+        lastError: rows.find((r) => r.lastError)?.lastError ?? null,
       },
       dailyLimit: s.dailyLimit,
     };
@@ -187,7 +194,9 @@ export class SorterService {
         list = list.filter((m) => !hits.includes(m.id));
       }
     }
-    if (!cfg.enabled || !list.length) return result;
+    // AI sorting off, or off for this mailbox (Spam & sorting → Mailboxes).
+    const optedOut = (row.settings as { aiSorting?: boolean } | null)?.aiSorting === false;
+    if (!cfg.enabled || optedOut || !list.length) return result;
     const tags = new Map(cfg.tags.map((t) => [t.id, t]));
 
     // 2. Senders a person already corrected: tag them the same way again.
@@ -210,8 +219,7 @@ export class SorterService {
     // 3. Claude, in batches, within today's limit.
     const apiKey = (await this.deps.settings.get("assistant")).apiKey;
     if (list.length && apiKey) {
-      const [u] = await this.db.select().from(aiUsage).where(eq(aiUsage.day, today()));
-      const remaining = Math.max(0, cfg.dailyLimit - (u?.messages ?? 0));
+      const remaining = Math.max(0, cfg.dailyLimit - (await sortedToday(this.db)));
       list = list.slice(0, remaining);
       const client = new Anthropic({ apiKey, maxRetries: 2 });
       for (let i = 0; i < list.length; i += BATCH) {
@@ -232,7 +240,11 @@ export class SorterService {
                 ? `Anthropic API error (${err.status}): ${err.message}`
                 : (err as Error).message;
           result.error = msg.slice(0, 500);
-          await this.usage({ errors: 1, lastError: result.error });
+          await recordAiUsage(this.db, {
+            feature: "sorter",
+            model: cfg.model,
+            error: result.error,
+          });
           this.deps.log.warn("AI sorting failed", { accountId, err: result.error });
           break; // the rest stay unsorted and are tried again after the next sync
         }
@@ -293,28 +305,6 @@ export class SorterService {
     const created = await find();
     if (!created) throw new Error(`Couldn't find the folder "${name}" after creating it.`);
     return created;
-  }
-
-  private async usage(add: {
-    messages?: number;
-    inputTokens?: number;
-    outputTokens?: number;
-    errors?: number;
-    lastError?: string;
-  }) {
-    await this.db
-      .insert(aiUsage)
-      .values({ day: today(), ...add })
-      .onConflictDoUpdate({
-        target: aiUsage.day,
-        set: {
-          messages: sql`${aiUsage.messages} + ${add.messages ?? 0}`,
-          inputTokens: sql`${aiUsage.inputTokens} + ${add.inputTokens ?? 0}`,
-          outputTokens: sql`${aiUsage.outputTokens} + ${add.outputTokens ?? 0}`,
-          errors: sql`${aiUsage.errors} + ${add.errors ?? 0}`,
-          ...(add.lastError !== undefined ? { lastError: add.lastError } : {}),
-        },
-      });
   }
 
   /** Ask Claude for one tag per message. Email content goes in as clearly marked data. */
@@ -387,10 +377,11 @@ export class SorterService {
       messages: [{ role: "user", content }],
       output_config: { effort: "low", format: zodOutputFormat(Output) },
     });
-    await this.usage({
+    await recordAiUsage(this.db, {
+      feature: "sorter",
+      model: res.model || cfg.model,
+      usage: res.usage,
       messages: batch.length,
-      inputTokens: res.usage.input_tokens,
-      outputTokens: res.usage.output_tokens,
     });
     const out = new Map<number, string>();
     const want = new Set(batch.map((m) => m.id));

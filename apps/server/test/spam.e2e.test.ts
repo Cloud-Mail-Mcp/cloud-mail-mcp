@@ -355,8 +355,29 @@ test("AI sorter: blocked senders, remembered senders, then Claude; tag actions r
   const status = await api("GET", "/sorter/status");
   assert.ok(status.today.messages >= 2);
   assert.ok(status.today.inputTokens >= 500);
+  assert.ok(status.today.costUsd > 0, "estimated cost from list prices");
+  const usage = await api("GET", "/ai/usage?days=1");
+  assert.ok(
+    usage.rows.some(
+      (r: { feature: string; model: string }) =>
+        r.feature === "sorter" && r.model === "claude-haiku-5-5",
+    ),
+  );
 
   // Already sorted: a second run does nothing.
   const again = await deps.sorter.runAccount(accountId);
   assert.equal(again.sorted + again.blocked + again.remembered, 0);
+
+  // AI sorting switched off for this mailbox: new mail isn't tagged (blocked senders still apply).
+  await api("PUT", `/sorter/accounts/${accountId}`, { aiSorting: false });
+  const { accounts: listed } = await api("GET", "/sorter/accounts");
+  assert.equal(listed.find((a: { id: string }) => a.id === accountId).aiSorting, false);
+  const before = asked.length;
+  await deliver(raw("Jordan <jordan@friends.example>", `Dinner Friday ${run}`));
+  await syncNow();
+  const off = await deps.sorter.runAccount(accountId);
+  assert.equal(off.sorted, 0);
+  assert.equal(asked.length, before, "the AI wasn't asked");
+  assert.deepEqual((await find(`Dinner Friday ${run}`))?.tags, []);
+  await api("PUT", `/sorter/accounts/${accountId}`, { aiSorting: true });
 });

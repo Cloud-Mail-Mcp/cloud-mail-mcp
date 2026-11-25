@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Alert, Button, Card, Checkbox, Field, Input, PageHeader, Spinner } from "../components/ui";
-import { type ApiError, api } from "../lib/api";
+import { type ApiError, api, formatUsd } from "../lib/api";
 
 type Action = "none" | "mark_read" | "archive" | "spam" | "folder";
 interface Tag {
@@ -29,6 +29,7 @@ interface Status {
     messages: number;
     inputTokens: number;
     outputTokens: number;
+    costUsd: number;
     errors: number;
     lastError: string | null;
   };
@@ -61,6 +62,7 @@ export function SortingPage() {
       <div className="space-y-6">
         <SorterCards />
         <BackfillCard />
+        <MailboxesCard />
         <BlockedSendersCard />
         <LearnedCard />
         <TipsCard />
@@ -175,7 +177,11 @@ function SorterCards() {
           {s && (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Today: {fmt(s.today.messages)} of {fmt(s.dailyLimit)} messages sorted ·{" "}
-              {fmt(s.today.inputTokens)} input and {fmt(s.today.outputTokens)} output tokens
+              {fmt(s.today.inputTokens + s.today.outputTokens)} tokens · about{" "}
+              {formatUsd(s.today.costUsd)} ·{" "}
+              <Link href="/settings#ai-usage" className="text-blue-600 hover:underline">
+                Usage and cost
+              </Link>
             </p>
           )}
           {s?.today.lastError && (
@@ -327,6 +333,59 @@ function BackfillCard() {
           </Alert>
         )}
         {go.error && <Alert tone="error" title={(go.error as Error).message} />}
+      </div>
+    </Card>
+  );
+}
+
+/** Which mailboxes the AI sorter tags (all, unless switched off here). */
+function MailboxesCard() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["sorter-accounts"],
+    queryFn: () =>
+      api<{
+        accounts: Array<{ id: string; address: string; label: string | null; aiSorting: boolean }>;
+      }>("/sorter/accounts"),
+  });
+  const toggle = useMutation({
+    mutationFn: (v: { id: string; aiSorting: boolean }) =>
+      api(`/sorter/accounts/${v.id}`, { method: "PUT", body: { aiSorting: v.aiSorting } }),
+    onMutate: (v) =>
+      qc.setQueryData<typeof q.data>(["sorter-accounts"], (old) =>
+        old
+          ? {
+              accounts: old.accounts.map((a) =>
+                a.id === v.id ? { ...a, aiSorting: v.aiSorting } : a,
+              ),
+            }
+          : old,
+      ),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["sorter-accounts"] }),
+  });
+  const list = q.data?.accounts ?? [];
+  if (!list.length) return null;
+  const on = list.filter((a) => a.aiSorting).length;
+  return (
+    <Card title={`Mailboxes · AI sorting on for ${on} of ${list.length}`}>
+      <div className="space-y-3">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Turn AI sorting off for mailboxes that don't need it, for example a shared or low-volume
+          one, to save cost. Blocked senders still go to Spam in every mailbox.
+        </p>
+        <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          {list.map((a) => (
+            <li key={a.id} className="px-3 py-2">
+              <Checkbox
+                id={`ai-${a.id}`}
+                label={`${a.address}${a.label ? ` · ${a.label}` : ""}`}
+                checked={a.aiSorting}
+                onChange={(v) => toggle.mutate({ id: a.id, aiSorting: v })}
+              />
+            </li>
+          ))}
+        </ul>
+        {toggle.error && <Alert tone="error" title={(toggle.error as Error).message} />}
       </div>
     </Card>
   );

@@ -2,12 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Alert, Button, Card, PageHeader, Spinner } from "../components/ui";
-import { type AgentSummary, api } from "../lib/api";
+import { type AgentSummary, api, formatUsd } from "../lib/api";
 
 type Part = { key: string } & (
   | { kind: "text"; text: string }
   | { kind: "tool"; id: string; name: string; state: "running" | "ok" | "error" }
   | { kind: "notice"; text: string }
+  | { kind: "usage"; tokens: number; costUsd: number }
 );
 type Turn = { key: string } & (
   | { role: "user"; text: string }
@@ -21,6 +22,7 @@ type ChatEvent =
   | { type: "tool"; id: string; name: string }
   | { type: "tool_result"; id: string; isError: boolean }
   | { type: "notice"; text: string }
+  | { type: "usage"; tokens: number; costUsd: number }
   | { type: "error"; message: string }
   | { type: "done"; history: unknown[] };
 
@@ -79,6 +81,8 @@ export function ChatPage() {
         if (p?.kind === "tool") parts[i] = { ...p, state: e.isError ? "error" : "ok" };
       } else if (e.type === "notice") {
         parts.push({ key: nextKey(), kind: "notice", text: e.text });
+      } else if (e.type === "usage") {
+        parts.push({ key: nextKey(), kind: "usage", tokens: e.tokens, costUsd: e.costUsd });
       }
       return [...ts.slice(0, -1), { ...last, parts }];
     });
@@ -251,6 +255,14 @@ export function ChatPage() {
                     </span>
                     {toolLabel(p.name)}
                     {p.state === "error" && <span className="sr-only">(failed)</span>}
+                  </p>
+                ) : p.kind === "usage" ? (
+                  <p
+                    key={p.key}
+                    className="text-[11px] text-zinc-400"
+                    title="Estimated from Anthropic's list prices. Totals: Settings → AI usage."
+                  >
+                    {p.tokens.toLocaleString()} tokens · about {formatUsd(p.costUsd)}
                   </p>
                 ) : (
                   <p key={p.key} className="text-xs italic text-zinc-500">

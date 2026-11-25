@@ -2,6 +2,7 @@ import "./env-compat";
 
 export * from "./accounts";
 export * from "./agents";
+export * from "./ai-usage";
 export * from "./approvals";
 export * from "./audit";
 export * from "./blobs";

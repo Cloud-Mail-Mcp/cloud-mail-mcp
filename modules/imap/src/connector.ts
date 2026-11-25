@@ -264,8 +264,10 @@ export class ImapConnector implements Connector {
         yield { type: "cursor", cursor: { ...c } };
       }
 
-      // Phase C — flag changes on mail we already have.
-      if (modseq && c.modseq && modseq !== c.modseq && !opts.fullReconcile) {
+      // Phase C — flag changes on mail we already have. With none yet (c.high 0, e.g. an empty
+      // folder whose MODSEQ moved) there's nothing to check, and "1:0" is a syntax error to
+      // Gmail ("Could not parse command").
+      if (modseq && c.modseq && modseq !== c.modseq && !opts.fullReconcile && c.high > 0) {
         for await (const msg of client.fetch(
           `1:${c.high}`,
           { uid: true, flags: true },

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { AiUsageCard } from "../components/AiUsageCard";
 import {
   Alert,
   Button,
@@ -489,6 +490,7 @@ export function SettingsPage() {
         <MailCard />
         <UpdatesCard />
         <AssistantCard />
+        <AiUsageCard />
         <AgentAccountsCard />
         <StorageCard />
         <SyncCard />

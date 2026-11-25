@@ -647,12 +647,28 @@ export const sorterExamples = pgTable(
   (t) => [uniqueIndex("sorter_examples_uq").on(t.orgId, t.fromEmail)],
 );
 
-/** AI sorter usage per day (instance-wide), for the daily limit and Settings. */
-export const aiUsage = pgTable("ai_usage", {
-  day: text("day").primaryKey(), // YYYY-MM-DD (UTC)
-  messages: integer("messages").notNull().default(0),
-  inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
-  outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
-  errors: integer("errors").notNull().default(0),
-  lastError: text("last_error"),
-});
+/**
+ * Anthropic API usage per day, feature ("sorter", "chat") and model (instance-wide): tokens, an
+ * estimated cost from list prices at the time, and the AI sorter's daily message count.
+ */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    day: text("day").notNull(), // YYYY-MM-DD (UTC)
+    feature: text("feature").notNull().default("sorter"),
+    model: text("model").notNull().default(""),
+    /** API calls made. */
+    requests: integer("requests").notNull().default(0),
+    /** Messages the AI sorter tagged. */
+    messages: integer("messages").notNull().default(0),
+    inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+    outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+    cacheReadTokens: bigint("cache_read_tokens", { mode: "number" }).notNull().default(0),
+    cacheWriteTokens: bigint("cache_write_tokens", { mode: "number" }).notNull().default(0),
+    /** Estimated cost in millionths of a US dollar. */
+    costMicros: bigint("cost_micros", { mode: "number" }).notNull().default(0),
+    errors: integer("errors").notNull().default(0),
+    lastError: text("last_error"),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.feature, t.model] })],
+);
