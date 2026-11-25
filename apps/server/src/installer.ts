@@ -228,7 +228,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}bu
 .toggle{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13.5px}
 code{font-family:ui-monospace,Menlo,monospace;font-size:13px}
 </style></head><body><main>
-<div class="logo"><!-- Same mark as apps/admin/src/assets/logo.svg --><svg class="mark" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2563EB"/><path d="M8.5 22.5V10l7.5 6.75L23.5 10v12.5z" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="16.75" r="1.9" fill="#FFFFFF"/></svg><div><h1>Connect a database</h1><p class="sub">Step 1 of setup. Cloud Mail MCP stores its index and settings in PostgreSQL.</p></div></div>
+<div class="logo"><!-- Same mark as apps/admin/src/assets/logo.svg --><svg class="mark" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2563EB"/><path d="M8.4 25.5h15.4a5.7 5.7 0 0 0 1.1-11.3 7.7 7.7 0 0 0-14.9-.8A6.1 6.1 0 0 0 8.4 25.5z" fill="#FFFFFF"/><path d="M11.3 15.6h9.4v6.6h-9.4z" fill="none" stroke="#2563EB" stroke-width="1.8" stroke-linejoin="round"/><path d="M11.3 15.6 16 19.1l4.7-3.5" fill="none" stroke="#2563EB" stroke-width="1.8" stroke-linejoin="round"/></svg><div><h1>Connect a database</h1><p class="sub">Step 1 of setup. Cloud Mail MCP stores its index and settings in PostgreSQL.</p></div></div>
 <form class="card" id="f" novalidate>
 <label for="code">Setup code</label>
 <input id="code" name="code" autocomplete="off" required placeholder="XXXX-XXXX" autocapitalize="characters">
