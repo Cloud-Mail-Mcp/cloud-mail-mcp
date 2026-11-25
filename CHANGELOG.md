@@ -46,6 +46,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   mailboxes too). **X** selects the open message, **Delete** deletes the selection, **Esc**
   clears it. In Trash, deleting asks first, because it's permanent.
 - Opening an unread message marks it as read.
+- Fixed: some newsletters and marketing emails opened in a short box with their own scrollbar
+  instead of at full length. Messages now size to their content, and keep doing so as images
+  load.
 - Images in email now show by default. To stop senders from seeing when you open their mail,
   turn on **Block remote images** under Settings → Mail; then each message has a "Show images"
   button.

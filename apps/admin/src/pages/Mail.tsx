@@ -71,12 +71,62 @@ function HtmlBody({ html }: { html: string }) {
   const csp = showImages
     ? "default-src 'none'; img-src https: http: data: cid:; style-src 'unsafe-inline'; font-src https: data:"
     : "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'";
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font:14px/1.5 system-ui,sans-serif;color:#18181b;margin:0;padding:4px;word-wrap:break-word}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
+  // The trailing style comes after the email's own CSS so it wins: many templates set
+  // html/body to height:100%, which would make the page only as tall as the frame and stop it
+  // from growing to fit.
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>body{font:14px/1.5 system-ui,sans-serif;color:#18181b;margin:0;padding:4px;word-wrap:break-word}img{max-width:100%;height:auto}</style></head><body>${html}<style>html,body{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important}</style></body></html>`;
 
-  const resize = () => {
+  // Size the frame to its content, and keep doing so as images and fonts load, the window
+  // width changes, or a collapsed message is opened.
+  const cleanup = useRef<() => void>(() => {});
+  useEffect(() => () => cleanup.current(), []);
+  const onLoad = () => {
+    cleanup.current();
     const f = ref.current;
-    if (f?.contentDocument?.body)
-      f.style.height = `${f.contentDocument.documentElement.scrollHeight + 8}px`;
+    const d = f?.contentDocument;
+    if (!f || !d?.body) return;
+    // Content sized to the window (height:100vh) grows whenever the frame does. Growth that
+    // follows our own resize straight away, several times in a row, is that loop: stop there.
+    let lastSet = 0;
+    let echoes = 0;
+    const fit = () => {
+      const h = Math.max(
+        d.body.scrollHeight,
+        d.body.getBoundingClientRect().bottom,
+        // Content can overflow the body (absolute positioning, floats).
+        ...Array.from(d.body.children, (c) => c.getBoundingClientRect().bottom),
+        // A wrapper that fills the page with its own scrollbar (pinned to the edges): its
+        // content. Smaller scroll boxes inside the email are left as they are.
+        ...Array.from(d.body.querySelectorAll("*"))
+          .slice(0, 3000)
+          .filter(
+            (e) =>
+              e.scrollHeight > e.clientHeight + 1 &&
+              e.clientHeight >= d.documentElement.clientHeight * 0.8 &&
+              /auto|scroll/.test(d.defaultView?.getComputedStyle(e).overflowY ?? ""),
+          )
+          .map((e) => e.getBoundingClientRect().top + e.scrollHeight),
+      );
+      const next = Math.ceil(h) + 12;
+      const now = performance.now();
+      if (next === Number.parseInt(f.style.height || "0", 10)) return;
+      if (next > Number.parseInt(f.style.height || "0", 10) && now - lastSet < 100) {
+        if (++echoes > 5) return ro.disconnect();
+      } else echoes = 0;
+      lastSet = now;
+      f.style.height = `${next}px`;
+    };
+    const ro = new ResizeObserver(fit);
+    fit();
+    ro.observe(d.body);
+    ro.observe(f);
+    const onAsset = () => fit();
+    d.addEventListener("load", onAsset, true); // images, captured
+    d.fonts?.ready.then(fit).catch(() => {});
+    cleanup.current = () => {
+      ro.disconnect();
+      d.removeEventListener("load", onAsset, true);
+    };
   };
 
   return (
@@ -99,7 +149,7 @@ function HtmlBody({ html }: { html: string }) {
         // allow-same-origin only so we can measure height; scripts stay disabled.
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         srcDoc={doc}
-        onLoad={resize}
+        onLoad={onLoad}
         className="w-full rounded-md border border-zinc-200 bg-white dark:border-zinc-700"
         style={{ minHeight: 120 }}
       />
