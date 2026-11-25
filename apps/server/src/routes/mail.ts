@@ -1,4 +1,5 @@
 import { MailError } from "@cloud-mail-mcp/core";
+import { eq, folders } from "@cloud-mail-mcp/db";
 import { parseSort } from "@cloud-mail-mcp/search";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -120,6 +121,59 @@ export async function mailRoutes(app: FastifyInstance, d: AppDeps) {
         unread: counts.get(t.id)?.unread ?? 0,
       })),
     };
+  });
+
+  /** The folder row behind a folder id (its account and path), for the folder routes below. */
+  const folderRow = async (id: number) => {
+    const [f] = await d.db.select().from(folders).where(eq(folders.id, id));
+    if (!f) throw new MailError("Folder not found.", 404);
+    return f;
+  };
+  const FolderName = z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((v) => !/[\\*%"]/.test(v), "Folder names can't contain \\ * % or quotes.");
+
+  /** New folder, at the top level or inside `parentId`. */
+  app.post("/api/v1/mail/folders", { preHandler: writer }, async (req, reply) => {
+    const b = z
+      .object({ accountId: z.uuid(), name: FolderName, parentId: z.number().int().optional() })
+      .parse(req.body);
+    let path = b.name;
+    if (b.parentId) {
+      const parent = await folderRow(b.parentId);
+      if (parent.accountId !== b.accountId)
+        throw new MailError("That folder is in another mailbox.");
+      path = `${parent.path}${parent.delimiter || "/"}${b.name}`;
+    }
+    reply.code(201);
+    return d.mail.createFolder(await access(req), b.accountId, path);
+  });
+
+  /** Rename a folder (its last part; it stays where it is). */
+  app.patch("/api/v1/mail/folders/:id", { preHandler: writer }, async (req) => {
+    const { id } = Id.parse(req.params);
+    const { name } = z.object({ name: FolderName }).parse(req.body);
+    const f = await folderRow(id);
+    const sep = f.delimiter || "/";
+    const i = f.path.lastIndexOf(sep);
+    const newPath = i === -1 ? name : `${f.path.slice(0, i)}${sep}${name}`;
+    return d.mail.renameFolder(await access(req), f.accountId, id, newPath);
+  });
+
+  /** Delete a folder; mail still in it is moved first ("move" to moveTo, or "trash"). */
+  app.delete("/api/v1/mail/folders/:id", { preHandler: writer }, async (req) => {
+    const { id } = Id.parse(req.params);
+    const q = z
+      .object({
+        messages: z.enum(["move", "trash"]).optional(),
+        moveTo: z.coerce.number().int().optional(),
+      })
+      .parse(req.query);
+    const f = await folderRow(id);
+    return d.mail.deleteFolder(await access(req), f.accountId, id, q);
   });
 
   app.post("/api/v1/mail/messages/delete", { preHandler: writer }, async (req) => {

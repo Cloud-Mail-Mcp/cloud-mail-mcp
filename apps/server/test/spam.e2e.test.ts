@@ -381,3 +381,46 @@ test("AI sorter: blocked senders, remembered senders, then Claude; tag actions r
   assert.deepEqual((await find(`Dinner Friday ${run}`))?.tags, []);
   await api("PUT", `/sorter/accounts/${accountId}`, { aiSorting: true });
 });
+
+test("folders: create, rename, move mail in, and deleting asks where the mail goes", {
+  skip,
+}, async () => {
+  const name = `Projects ${run}`;
+  await api("POST", "/mail/folders", { accountId, name });
+  let { folders } = await api("GET", `/mail/folders?accountId=${accountId}`);
+  const created = folders.find((f: { path: string }) => f.path === name);
+  assert.ok(created, "created");
+
+  await api("PATCH", `/mail/folders/${created.id}`, { name: `Clients ${run}` });
+  ({ folders } = await api("GET", `/mail/folders?accountId=${accountId}`));
+  const renamed =
+    folders.find((f: { id: number }) => f.id === created.id) ??
+    folders.find((f: { path: string }) => f.path === `Clients ${run}`);
+  assert.equal(renamed.path, `Clients ${run}`);
+
+  await deliver(raw("Avery <avery@client.example>", `Contract ${run}`));
+  await syncNow();
+  const m = await find(`Contract ${run}`);
+  await api("POST", "/mail/messages/move", { ids: [m!.id], folder: renamed.id });
+  await syncNow();
+  assert.deepEqual((await find(`Contract ${run}`))?.folders, [`Clients ${run}`]);
+
+  // A folder with mail isn't deleted until you say where the mail goes.
+  const refused = await fetch(`${base}/api/v1/mail/folders/${renamed.id}`, {
+    method: "DELETE",
+    headers: { cookie },
+  });
+  assert.equal(refused.status, 409);
+  assert.match((await refused.json()).error, /1 messages/);
+  const inbox = folders.find((f: { role: string }) => f.role === "inbox");
+  const r = await fetch(
+    `${base}/api/v1/mail/folders/${renamed.id}?messages=move&moveTo=${inbox.id}`,
+    { method: "DELETE", headers: { cookie } },
+  );
+  // GreenMail crashes deleting a folder another session (here the sync) has opened, so the
+  // DELETE itself may fail here (a clear 502); real servers delete it. The mail moves first.
+  assert.ok(r.status === 200 || r.status === 502, `status ${r.status}`);
+  if (r.status === 502) assert.match((await r.json()).error, /already moved/);
+  await syncNow();
+  assert.deepEqual((await find(`Contract ${run}`))?.folders, ["INBOX"], "mail moved back");
+});

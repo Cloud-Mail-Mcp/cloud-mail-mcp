@@ -678,11 +678,30 @@ export function buildMcpServer(access: Access, d: AppDeps, opts: { baseUrl?: str
       "delete_folder",
       {
         title: "Delete a folder",
-        inputSchema: { account_id: z.string().uuid(), folder: z.string() },
+        description:
+          'A folder that still has mail is only deleted with messages: "move" (to move_to) or "trash"; ask the user which they want.',
+        inputSchema: {
+          account_id: z.string().uuid(),
+          folder: z.string(),
+          messages: z.enum(["move", "trash"]).optional(),
+          move_to: z.string().optional().describe('Folder for the mail when messages is "move"'),
+        },
         annotations: { destructiveHint: true },
       },
-      tool("delete_folder", async (a: { account_id: string; folder: string }) =>
-        json(await d.mail.deleteFolder(access, a.account_id, a.folder)),
+      tool(
+        "delete_folder",
+        async (a: {
+          account_id: string;
+          folder: string;
+          messages?: "move" | "trash";
+          move_to?: string;
+        }) =>
+          json(
+            await d.mail.deleteFolder(access, a.account_id, a.folder, {
+              messages: a.messages,
+              moveTo: a.move_to,
+            }),
+          ),
       ),
     );
   }

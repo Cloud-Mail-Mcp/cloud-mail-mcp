@@ -127,6 +127,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   over the last 7, 30 or 90 days, per model and per day, from Anthropic's list prices. Each Chat
   answer shows its tokens and cost, and Spam & sorting shows today's cost.
 
+### Folders
+
+- Create, rename and delete folders in Mail: **+ New folder** under each mailbox, and **⋯ →
+  Rename / Delete** next to your own folders (system folders such as Inbox and Sent stay put).
+- Deleting a folder that still has mail asks what to do with it first: move it to another folder,
+  or to Trash. A folder with subfolders, or with mail that hasn't synced yet, isn't deleted.
+- Move mail between folders by dragging messages (or a selection) onto a folder, or with **Move
+  to…** on an open message.
+- Agents' `delete_folder` tool follows the same rule (`messages: "move"` or `"trash"`).
+
+### Agents
+
+- **Change several…** on an agent's page sets permissions for many mailboxes at once (presets or
+  individual permissions); each mailbox keeps its folder, recipient and rate limits.
+- **Give all permissions** grants every permission on every mailbox, after saying what that allows,
+  with sending still held for approval unless you untick it.
+
 ### Moving to a new mail host
 
 - New **Migrations** page: copy all mail from one account to another, for example the same

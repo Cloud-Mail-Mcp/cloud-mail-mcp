@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { DeleteFolderDialog, NewFolder, RenameFolder } from "../components/FolderTools";
 import { Alert, Button, Spinner } from "../components/ui";
 import {
   type AccountSummary,
@@ -338,7 +339,7 @@ function UnsubscribeButton({
   );
 }
 
-type RemoveKind = "trash" | "archive" | "spam" | "notspam";
+type RemoveKind = "trash" | "archive" | "spam" | "notspam" | "move";
 
 /** Spam, with the option to send the sender's future mail to Spam too. */
 function SpamMenu({ sender, onSpam }: { sender?: string; onSpam: (block: boolean) => void }) {
@@ -376,13 +377,16 @@ function Reader({
   onChanged,
   onRemove,
   tags,
+  foldersOf,
 }: {
   id: number;
   onClose: () => void;
   onChanged: () => void;
   /** Delete, archive or spam: the page hides the message and opens the next one right away. */
-  onRemove: (kind: RemoveKind, opts?: { blockSender?: boolean }) => void;
+  onRemove: (kind: RemoveKind, opts?: { blockSender?: boolean; folder?: number }) => void;
   tags: MailTag[];
+  /** Folders of each mailbox, for "Move to…". */
+  foldersOf: (accountId: string) => MailFolder[];
 }) {
   const qc = useQueryClient();
   const thread = useQuery({
@@ -540,6 +544,23 @@ function Reader({
           <Button variant="secondary" onClick={() => onRemove("archive")}>
             Archive
           </Button>
+          <select
+            aria-label="Move to folder"
+            value=""
+            onChange={(e) => e.target.value && onRemove("move", { folder: Number(e.target.value) })}
+            className="rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          >
+            <option value="">Move to…</option>
+            {foldersOf(current.accountId)
+              .filter(
+                (f) => f.role !== "all" && f.role !== "drafts" && !current.folders.includes(f.path),
+              )
+              .map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.role ? (ROLE_LABEL[f.role] ?? f.path) : f.path}
+                </option>
+              ))}
+          </select>
           {current.folders.some((f) => /^(spam|junk|\[gmail\]\/spam)$/i.test(f)) ? (
             <Button variant="secondary" onClick={() => onRemove("notspam")}>
               Not spam
@@ -851,8 +872,11 @@ export function MailPage() {
       if (selected != null) qc.invalidateQueries({ queryKey: ["thread", selected] });
     }
   };
-  const removeMessage = (id: number, kind: RemoveKind, opts?: { blockSender?: boolean }) =>
-    act([id], kind, undefined, opts);
+  const removeMessage = (
+    id: number,
+    kind: RemoveKind,
+    opts?: { blockSender?: boolean; folder?: number },
+  ) => act([id], kind, opts?.folder, opts);
   const checkedIds = rows.filter((r) => checked.has(r.id)).map((r) => r.id);
 
   /** Click a checkbox (or Ctrl/⌘-click a row); with Shift, select everything up to the last one. */
@@ -1015,6 +1039,18 @@ export function MailPage() {
     setSelected(null);
   };
 
+  // Folder management: rename in place, delete with a dialog, drop messages onto a folder.
+  const [renaming, setRenaming] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<MailFolder | null>(null);
+  const dragged = useRef<{ ids: number[]; accountIds: Set<string> } | null>(null);
+  const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const folderLabel = (f: MailFolder) => (f.role ? (ROLE_LABEL[f.role] ?? f.path) : f.path);
+  const onFoldersChanged = () => {
+    setRenaming(null);
+    setDeleting(null);
+    refresh();
+  };
+
   const navItem = (active: boolean) =>
     `flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-sm ${
       active
@@ -1098,35 +1134,110 @@ export function MailPage() {
               </button>
               {open && (
                 <div id={`folders-${a.id}`} className="mt-0.5">
-                  {folders.map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      className={navItem(
-                        view.accountId === a.id && view.folder === String(f.id) && !query,
-                      )}
-                      onClick={() =>
-                        pick({
-                          accountId: a.id,
-                          folder: String(f.id),
-                          label: `${accountName(a)} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
-                        })
-                      }
-                    >
-                      <span className="truncate pl-4">{f.role ? ROLE_LABEL[f.role] : f.path}</span>
-                      {f.unreadCount > 0 && f.role !== "trash" && f.role !== "spam" && (
-                        <span className="text-xs tabular-nums">
-                          {f.unreadCount.toLocaleString()}
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                  {folders.map((f) =>
+                    renaming === f.id ? (
+                      <RenameFolder
+                        key={f.id}
+                        folder={f}
+                        onDone={onFoldersChanged}
+                        onCancel={() => setRenaming(null)}
+                      />
+                    ) : (
+                      <div key={f.id} className="group relative">
+                        <button
+                          type="button"
+                          onDragOver={(e) => {
+                            const d = dragged.current;
+                            if (!d || d.accountIds.size !== 1 || !d.accountIds.has(a.id)) return;
+                            e.preventDefault();
+                            setDropTarget(f.id);
+                          }}
+                          onDragLeave={() => setDropTarget((t) => (t === f.id ? null : t))}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setDropTarget(null);
+                            const d = dragged.current;
+                            dragged.current = null;
+                            if (d) void act(d.ids, f.role === "trash" ? "trash" : "move", f.id);
+                          }}
+                          className={`${navItem(
+                            view.accountId === a.id && view.folder === String(f.id) && !query,
+                          )} ${dropTarget === f.id ? "ring-2 ring-blue-500" : ""} ${f.role ? "" : "pr-8"}`}
+                          onClick={() =>
+                            pick({
+                              accountId: a.id,
+                              folder: String(f.id),
+                              label: `${accountName(a)} · ${f.role ? ROLE_LABEL[f.role] : f.path}`,
+                            })
+                          }
+                        >
+                          <span className="truncate pl-4">
+                            {f.role ? ROLE_LABEL[f.role] : f.path}
+                          </span>
+                          {f.unreadCount > 0 && f.role !== "trash" && f.role !== "spam" && (
+                            <span className="text-xs tabular-nums">
+                              {f.unreadCount.toLocaleString()}
+                            </span>
+                          )}
+                        </button>
+                        {!f.role && (
+                          <details className="absolute right-0.5 top-1/2 -translate-y-1/2">
+                            <summary
+                              aria-label={`Folder options for ${f.path}`}
+                              className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-zinc-400 opacity-0 hover:bg-zinc-200 hover:text-zinc-700 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                            >
+                              ⋯
+                            </summary>
+                            <div className="absolute right-0 z-20 mt-1 w-36 rounded-md border border-zinc-200 bg-white p-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  (e.currentTarget.closest("details") as HTMLDetailsElement).open =
+                                    false;
+                                  setRenaming(f.id);
+                                }}
+                                className="block w-full rounded px-2.5 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              >
+                                Rename
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  (e.currentTarget.closest("details") as HTMLDetailsElement).open =
+                                    false;
+                                  setDeleting(f);
+                                }}
+                                className="block w-full rounded px-2.5 py-1.5 text-left text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                              >
+                                Delete…
+                              </button>
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    ),
+                  )}
+                  <NewFolder accountId={a.id} onDone={onFoldersChanged} />
                 </div>
               )}
             </div>
           );
         })}
       </nav>
+      {deleting && (
+        <DeleteFolderDialog
+          folder={deleting}
+          others={(byAccount.get(deleting.accountId) ?? [])
+            .filter((o) => o.id !== deleting.id)
+            .map((o) => ({ id: o.id, label: folderLabel(o), role: o.role }))}
+          onClose={() => setDeleting(null)}
+          onDone={() => {
+            if (view.folder === String(deleting.id))
+              pick({ folder: "inbox", label: "All inboxes" });
+            onFoldersChanged();
+          }}
+        />
+      )}
 
       {/* List */}
       <section
@@ -1353,6 +1464,21 @@ export function MailPage() {
                 <li
                   key={m.id}
                   id={`msg-${m.id}`}
+                  draggable
+                  onDragStart={(e) => {
+                    // Drag the selection if this row is part of it, otherwise just this message.
+                    const ids = checked.has(m.id) ? checkedIds : [m.id];
+                    const accountIds = new Set(
+                      rows.filter((r) => ids.includes(r.id)).map((r) => r.accountId),
+                    );
+                    dragged.current = { ids, accountIds };
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", `${ids.length} message(s)`);
+                  }}
+                  onDragEnd={() => {
+                    dragged.current = null;
+                    setDropTarget(null);
+                  }}
                   className={`flex items-start ${
                     selected === m.id
                       ? "bg-blue-50 dark:bg-blue-950/40"
@@ -1469,6 +1595,7 @@ export function MailPage() {
             onChanged={refresh}
             onRemove={(kind, opts) => void removeMessage(selected, kind, opts)}
             tags={tagList}
+            foldersOf={(id) => byAccount.get(id) ?? []}
           />
         ) : (
           <div className="mt-20 text-center text-sm text-zinc-500">

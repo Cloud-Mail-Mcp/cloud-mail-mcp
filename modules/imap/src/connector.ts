@@ -534,6 +534,9 @@ export class ImapConnector implements Connector {
 
   async deleteFolder(folder: RemoteFolder): Promise<void> {
     const client = await this.imap();
+    // Leave the folder first if this connection has it open (e.g. after moving its mail out):
+    // some servers drop the connection when the open folder is deleted.
+    if (client.mailbox && client.mailbox.path === folder.remoteId) await client.mailboxClose();
     await client.mailboxDelete(folder.remoteId);
   }
 

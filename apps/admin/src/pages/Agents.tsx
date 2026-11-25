@@ -544,6 +544,231 @@ function GrantEditor({
   );
 }
 
+/** Every permission there is. */
+const ALL_SCOPES = SCOPE_LABELS.map(([s]) => s);
+
+/**
+ * Save one set of permissions to several mailboxes. Each mailbox keeps its own folder limits,
+ * recipient limits and rate limit; only the permissions and send policy change.
+ */
+async function applyGrants(
+  agentId: string,
+  accounts: AccountSummary[],
+  grants: Grant[],
+  scopes: string[],
+  sendPolicy: SendPolicy,
+) {
+  for (const a of accounts) {
+    const g = grants.find((x) => x.accountId === a.id);
+    await api(`/agents/${agentId}/grants/${a.id}`, {
+      method: "PUT",
+      body: {
+        scopes,
+        sendPolicy,
+        folderAllow: g?.folderAllow ?? null,
+        folderDeny: g?.folderDeny ?? null,
+        recipientAllow: g?.recipientAllow ?? null,
+        rateLimit: g?.rateLimit ?? null,
+      },
+    });
+  }
+}
+
+/** Change several mailboxes' permissions at once. */
+function BulkGrantEditor({
+  agent,
+  accounts,
+  onDone,
+}: {
+  agent: AgentDetail;
+  accounts: AccountSummary[];
+  onDone: () => void;
+}) {
+  const [picked, setPicked] = useState<Set<string>>(new Set(accounts.map((a) => a.id)));
+  const [scopes, setScopes] = useState<Set<string>>(new Set(PRESETS.assistant!.scopes));
+  const [sendPolicy, setSendPolicy] = useState<SendPolicy>("approve");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const flip = (set: Set<string>, v: string, on: boolean) => {
+    const n = new Set(set);
+    on ? n.add(v) : n.delete(v);
+    return n;
+  };
+  const go = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await applyGrants(
+        agent.id,
+        accounts.filter((a) => picked.has(a.id)),
+        agent.grants,
+        [...scopes],
+        scopes.has("mail:send") ? sendPolicy : "deny",
+      );
+      onDone();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mb-4 space-y-4 rounded-lg border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
+      <fieldset>
+        <legend className="mb-2 flex w-full items-center justify-between text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          Mailboxes
+          <span className="space-x-3 text-xs font-normal">
+            <button
+              type="button"
+              className="text-blue-600 hover:underline"
+              onClick={() => setPicked(new Set(accounts.map((a) => a.id)))}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className="text-blue-600 hover:underline"
+              onClick={() => setPicked(new Set())}
+            >
+              None
+            </button>
+          </span>
+        </legend>
+        <div className="grid max-h-48 gap-1.5 overflow-y-auto sm:grid-cols-2">
+          {accounts.map((a) => (
+            <Checkbox
+              key={a.id}
+              id={`bulk-a-${a.id}`}
+              label={accountName(a)}
+              checked={picked.has(a.id)}
+              onChange={(v) => setPicked((p) => flip(p, a.id, v))}
+            />
+          ))}
+        </div>
+      </fieldset>
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(PRESETS).map(([k, p]) => (
+          <Button
+            key={k}
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setScopes(new Set(p.scopes));
+              setSendPolicy(p.sendPolicy === "deny" ? "approve" : p.sendPolicy);
+            }}
+          >
+            {p.label}
+          </Button>
+        ))}
+        <Button type="button" variant="secondary" onClick={() => setScopes(new Set(ALL_SCOPES))}>
+          All permissions
+        </Button>
+      </div>
+      <fieldset className="grid gap-2 sm:grid-cols-2">
+        <legend className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          Permissions
+        </legend>
+        {SCOPE_LABELS.map(([s, label]) => (
+          <Checkbox
+            key={s}
+            id={`bulk-s-${s}`}
+            label={label}
+            checked={scopes.has(s)}
+            onChange={(v) => setScopes((cur) => flip(cur, s, v))}
+          />
+        ))}
+      </fieldset>
+      {scopes.has("mail:send") && (
+        <RadioGroup
+          name="bulk-sp"
+          label="When this agent sends mail"
+          value={sendPolicy}
+          onChange={(v) => setSendPolicy(v as SendPolicy)}
+          options={[
+            { value: "approve", label: "Hold for my approval" },
+            { value: "allow", label: "Send immediately" },
+          ]}
+        />
+      )}
+      {err && <Alert tone="error" title={err} />}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button busy={busy} disabled={!picked.size} onClick={go}>
+          Apply to {picked.size} {picked.size === 1 ? "mailbox" : "mailboxes"}
+        </Button>
+        <span className="text-xs text-zinc-500">
+          Folder, recipient and rate limits already set on a mailbox are kept.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Every permission on every mailbox, after saying plainly what that allows. */
+function AllPermissions({
+  agent,
+  accounts,
+  onDone,
+  onCancel,
+}: {
+  agent: AgentDetail;
+  accounts: AccountSummary[];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [approve, setApprove] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <div className="mb-4">
+      <Alert
+        tone="warning"
+        title={`Give “${agent.name}” every permission on all ${accounts.length} ${accounts.length === 1 ? "mailbox" : "mailboxes"}?`}
+      >
+        <p>
+          It will be able to read, organize, draft, send, unsubscribe, delete (including
+          permanently) and manage folders in every mailbox. Everything it does is in the audit log.
+        </p>
+        <div className="mt-3">
+          <Checkbox
+            id="all-approve"
+            label="Still hold each email it sends for my approval (recommended)"
+            checked={approve}
+            onChange={setApprove}
+          />
+        </div>
+        {err && <p className="mt-2 text-red-700 dark:text-red-400">{err}</p>}
+        <div className="mt-3 flex gap-2">
+          <Button
+            busy={busy}
+            onClick={async () => {
+              setBusy(true);
+              setErr(null);
+              try {
+                await applyGrants(
+                  agent.id,
+                  accounts,
+                  agent.grants,
+                  ALL_SCOPES,
+                  approve ? "approve" : "allow",
+                );
+                onDone();
+              } catch (e) {
+                setErr((e as Error).message);
+                setBusy(false);
+              }
+            }}
+          >
+            Give all permissions
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </Alert>
+    </div>
+  );
+}
+
 // ───────────────────────────── Detail ─────────────────────────────
 
 export function AgentDetailPage({ id }: { id: string }) {
@@ -559,6 +784,8 @@ export function AgentDetailPage({ id }: { id: string }) {
   });
   const [newKey, setNewKey] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [accessMode, setAccessMode] = useState<"bulk" | "all" | null>(null);
+  const [accessSaved, setAccessSaved] = useState<string | null>(null);
   const mcpUrl = useMcpUrl();
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["agent", id] });
@@ -640,11 +867,59 @@ export function AgentDetailPage({ id }: { id: string }) {
           </div>
         </Card>
 
-        <Card title="Mailbox access">
+        <Card
+          title="Mailbox access"
+          actions={
+            (accountsQ.data?.accounts ?? []).length > 0 && (
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setAccessMode(accessMode === "bulk" ? null : "bulk")}
+                >
+                  Change several…
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setAccessMode(accessMode === "all" ? null : "all")}
+                >
+                  Give all permissions
+                </Button>
+              </div>
+            )
+          }
+        >
           <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
             The agent can only see accounts you grant here, and only do what's checked. Every action
             is recorded in the audit log.
           </p>
+          {accessSaved && (
+            <div className="mb-4">
+              <Alert tone="success" title={accessSaved} />
+            </div>
+          )}
+          {accessMode === "bulk" && (
+            <BulkGrantEditor
+              agent={agent}
+              accounts={accountsQ.data?.accounts ?? []}
+              onDone={async () => {
+                setAccessMode(null);
+                setAccessSaved("Permissions saved. They apply on the agent's next request.");
+                await refresh();
+              }}
+            />
+          )}
+          {accessMode === "all" && (
+            <AllPermissions
+              agent={agent}
+              accounts={accountsQ.data?.accounts ?? []}
+              onCancel={() => setAccessMode(null)}
+              onDone={async () => {
+                setAccessMode(null);
+                setAccessSaved(`“${agent.name}” now has every permission on all mailboxes.`);
+                await refresh();
+              }}
+            />
+          )}
           <div className="space-y-3">
             {(accountsQ.data?.accounts ?? []).map((a) => (
               <GrantEditor

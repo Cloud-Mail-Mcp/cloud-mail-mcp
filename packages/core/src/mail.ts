@@ -32,6 +32,7 @@ import {
 import type { AccountRow } from "./accounts";
 import { audit } from "./audit";
 import { type MessageChecks, parseChecks } from "./checks";
+import { friendlyError } from "./errors";
 import { attachmentFromRaw } from "./parse";
 import {
   type Access,
@@ -343,6 +344,7 @@ export class MailService {
         accountId: folders.accountId,
         path: folders.path,
         role: folders.role,
+        delimiter: folders.delimiter,
         messageCount: folders.messageCount,
         unreadCount: folders.unreadCount,
       })
@@ -1418,18 +1420,92 @@ export class MailService {
     return { renamed: newPath };
   }
 
-  async deleteFolder(access: Access, accountId: string, folder: string | number) {
+  /**
+   * Delete a folder. If it still holds mail, `messages` says what happens to it first: "move" to
+   * `moveTo`, or "trash". Without a choice a folder with mail isn't deleted (on most servers
+   * deleting a folder deletes its mail for good).
+   */
+  async deleteFolder(
+    access: Access,
+    accountId: string,
+    folder: string | number,
+    opts: { messages?: "move" | "trash"; moveTo?: string | number } = {},
+  ) {
     requireScope(access, accountId, "folders:manage");
     const f = await this.folderFor(accountId, folder);
     if (f.role) throw new MailError(`"${f.path}" is a system folder and can't be deleted.`);
-    await this.s.pool.use(accountId, async (c) => {
-      if (!c.deleteFolder) throw new MailError("Not supported for this account type.");
-      await c.deleteFolder(asRemote(f));
-    });
+    const all = await this.db.select().from(folders).where(eq(folders.accountId, accountId));
+    const sep = f.delimiter || "/";
+    const subs = all.filter((o) => o.id !== f.id && o.path.startsWith(`${f.path}${sep}`));
+    if (subs.length)
+      throw new MailError(
+        `"${f.path}" has subfolders (${subs
+          .slice(0, 3)
+          .map((o) => o.path)
+          .join(", ")}${subs.length > 3 ? ", …" : ""}). Move or delete them first.`,
+        409,
+      );
+
+    const ids = (
+      await this.db
+        .select({ id: messageFolders.messageId })
+        .from(messageFolders)
+        .where(and(eq(messageFolders.accountId, accountId), eq(messageFolders.folderId, f.id)))
+    ).map((r) => r.id);
+    let moved = 0;
+    if (ids.length || f.messageCount > 0) {
+      if (!opts.messages)
+        throw new MailError(
+          `"${f.path}" has ${Math.max(ids.length, f.messageCount)} messages. Choose whether to move them to another folder or to Trash.`,
+          409,
+        );
+      const dest =
+        opts.messages === "trash"
+          ? await this.folderFor(accountId, "trash").catch(() => {
+              throw new MailError(
+                "This account has no Trash folder. Move the mail to another folder instead.",
+              );
+            })
+          : await this.folderFor(accountId, opts.moveTo ?? "");
+      if (dest.id === f.id) throw new MailError("Choose a different folder to move the mail to.");
+      const grant = requireScope(access, accountId, "mail:organize");
+      if (!folderAllowed(grant, dest.path, dest.role))
+        throw new AccessDenied(`You can't move mail into "${dest.path}".`);
+      // Only the copies in this folder move (a Gmail label elsewhere stays).
+      for (let i = 0; i < ids.length; i += 500) {
+        const byAccount = await this.resolve(access, ids.slice(i, i + 500), "mail:organize");
+        const items = (byAccount.get(accountId)?.items ?? [])
+          .map((it) => ({ ...it, places: it.places.filter((p) => p.folder.id === f.id) }))
+          .filter((it) => it.places.length);
+        if (items.length) await this.moveWithin(accountId, items, dest);
+        moved += items.length;
+      }
+      // Mail the server has but this copy hasn't synced yet would be lost with the folder.
+      await this.refreshFolders(accountId);
+      const [now] = await this.db.select().from(folders).where(eq(folders.id, f.id));
+      if (now && now.messageCount > 0)
+        throw new MailError(
+          `Moved ${moved} messages, but "${f.path}" still has ${now.messageCount} that haven't synced yet. Try again once the sync has finished.`,
+          409,
+        );
+      await this.log(access, "folder.empty", accountId, f.path, true, { to: dest.path, moved });
+    }
+    await this.s.pool
+      .use(accountId, async (c) => {
+        if (!c.deleteFolder) throw new MailError("Not supported for this account type.");
+        await c.deleteFolder(asRemote(f));
+      })
+      .catch((e: Error) => {
+        if (e instanceof MailError) throw e;
+        throw new MailError(
+          `The mail server couldn't delete "${f.path}": ${friendlyError(e).message}${moved ? ` (its ${moved} messages were already moved)` : ""}`,
+          502,
+        );
+      });
     await this.refreshFolders(accountId);
     await this.s.sync.cleanupOrphans(await this.row(accountId));
     await this.log(access, "folder.delete", accountId, f.path);
-    return { deleted: f.path };
+    return { deleted: f.path, moved };
   }
 }
 

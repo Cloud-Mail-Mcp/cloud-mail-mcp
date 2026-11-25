@@ -207,6 +207,8 @@ export interface MailFolder {
   accountId: string;
   path: string;
   role: string | null;
+  /** Separator between folder levels ("/" or "."). */
+  delimiter?: string | null;
   messageCount: number;
   unreadCount: number;
 }
