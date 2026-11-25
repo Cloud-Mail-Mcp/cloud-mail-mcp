@@ -33,6 +33,8 @@ const Mailbox = z.object({
   smtpSecure: z.boolean().optional(),
   username: z.string().max(320).optional(),
   password: z.string().max(1000).optional(),
+  ifExists: z.enum(["update", "add", "skip"]).optional(),
+  addIfFails: z.boolean().optional(),
 });
 
 export async function accountRoutes(
@@ -52,13 +54,20 @@ export async function accountRoutes(
 
   /**
    * Add many mailboxes (spreadsheet import): rows with a password are tested and added, the rest
-   * wait for a password. The browser sends a few rows per request to show progress.
+   * wait for a password. Per row: what to do when the address is already connected (update, add,
+   * skip), and whether to save it as not working if the login test fails. The browser sends a
+   * few rows per request to show progress.
    */
   app.post("/api/v1/accounts/bulk", { preHandler: admin }, async (req) => {
     const b = z.object({ mailboxes: z.array(Mailbox).min(1).max(50) }).parse(req.body);
-    return {
-      results: await drafts.add(req.user.orgId, { type: "user", id: req.user.id }, b.mailboxes),
-    };
+    const results = await drafts.add(
+      req.user.orgId,
+      { type: "user", id: req.user.id },
+      b.mailboxes,
+    );
+    // Updated logins: reconnect with the new settings.
+    for (const r of results) if (r.status === "updated") await pool.evict(r.accountId);
+    return { results };
   });
 
   /** Mailboxes waiting for a password (added by an agent or an import without passwords). */

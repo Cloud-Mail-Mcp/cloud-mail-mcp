@@ -88,6 +88,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Email is required (servers are guessed: Gmail, iCloud, otherwise mail.yourdomain). Rows with a
   password are tested and added; the rest wait for a password. The file is read in your browser,
   so passwords never go through an AI.
+  - Mailboxes that are already connected are listed first, and you choose what happens to them:
+    **Update** (new password and any servers, name or label from the file; synced mail is kept),
+    **Add another login** (e.g. the same address on a new host), or **Skip**. The choice can be
+    changed for a single row.
+  - Mailboxes that can't log in (often a changed password) can be **added anyway, as not
+    working**, then fixed one by one with "Fix login" on the Accounts page.
+- A mailbox whose password is rejected is retried once an hour instead of every few minutes, so
+  the mail server doesn't block you for too many failed logins.
 - **AI agents can add mailboxes** when you allow it on the agent's page (`add_mailboxes` tool),
   for example from a list you give them. They're added without passwords and wait under
   **Waiting for password** on the Accounts page, where you type each one in; you also choose

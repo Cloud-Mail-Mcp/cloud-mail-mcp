@@ -234,3 +234,99 @@ test("spreadsheet import endpoint: bad rows and duplicates are reported per row"
   assert.equal(drafts[0].config.imap.host, "mail.example.org", "servers guessed from the domain");
   await api("DELETE", `/accounts/drafts/${drafts[0].id}`);
 });
+
+test("import: mailboxes already connected can be skipped, updated or added again", {
+  skip,
+}, async () => {
+  const daveRow = {
+    address: DAVE.user,
+    imapHost: "127.0.0.1",
+    imapPort: 3143,
+    imapSecure: false,
+    smtpHost: "127.0.0.1",
+    smtpPort: 3025,
+    smtpSecure: false,
+  };
+  const before = (await api("GET", "/accounts")).accounts.filter(
+    (a: { address: string }) => a.address === DAVE.user,
+  );
+  assert.equal(before.length, 1);
+
+  const skipped = await api("POST", "/accounts/bulk", {
+    mailboxes: [{ ...daveRow, password: DAVE.pass, ifExists: "skip" }],
+  });
+  assert.equal(skipped.results[0].status, "skipped");
+
+  // Update: the new password (tested) and the label from the file; the rest is kept.
+  const updated = await api("POST", "/accounts/bulk", {
+    mailboxes: [{ ...daveRow, password: DAVE.pass, label: "From the sheet", ifExists: "update" }],
+  });
+  assert.equal(updated.results[0].status, "updated", JSON.stringify(updated.results[0]));
+  assert.equal(updated.results[0].accountId, before[0].id);
+  const acct = (await api("GET", `/accounts/${before[0].id}`)).account;
+  assert.equal(acct.label, "From the sheet");
+  assert.equal(acct.config.imap.port, 3143);
+
+  // Nothing but the address: nothing to update.
+  const nothing = await api("POST", "/accounts/bulk", {
+    mailboxes: [{ address: DAVE.user, ifExists: "update" }],
+  });
+  assert.equal(nothing.results[0].status, "skipped");
+  assert.match(nothing.results[0].note, /nothing to change/);
+
+  // "Add" with the same login is still refused (it would be the same mailbox twice).
+  const again = await api("POST", "/accounts/bulk", {
+    mailboxes: [{ ...daveRow, password: DAVE.pass, ifExists: "add" }],
+  });
+  assert.equal(again.results[0].status, "error");
+  assert.match(again.results[0].error, /already connected/);
+});
+
+test("import: a mailbox that fails its test can be added anyway, as not working", {
+  skip,
+}, async () => {
+  // An unreachable server stands in for a changed password (GreenMail misbehaves after failed logins).
+  const row = {
+    address: "moved@example.org",
+    password: "old-password",
+    imapHost: "127.0.0.1",
+    imapPort: 1,
+    imapSecure: false,
+    smtpHost: "127.0.0.1",
+    smtpPort: 1,
+    smtpSecure: false,
+  };
+  const first = await api("POST", "/accounts/bulk", { mailboxes: [row] });
+  assert.equal(first.results[0].status, "error");
+  assert.equal(first.results[0].canAddAnyway, true);
+  assert.equal(
+    (await api("GET", "/accounts")).accounts.some(
+      (a: { address: string }) => a.address === row.address,
+    ),
+    false,
+  );
+
+  const anyway = await api("POST", "/accounts/bulk", { mailboxes: [{ ...row, addIfFails: true }] });
+  const r = anyway.results[0];
+  assert.equal(r.status, "added", JSON.stringify(r));
+  assert.equal(r.working, false);
+  const acct = (await api("GET", `/accounts/${r.accountId}`)).account;
+  assert.equal(acct.status, "error");
+  assert.match(acct.statusMessage, /Added without a working login/);
+  assert.ok(acct.settings.failedAt, "remembered when it failed");
+
+  // Updating an existing mailbox with settings that fail: saved anyway when asked, marked not working.
+  const upd = await api("POST", "/accounts/bulk", {
+    mailboxes: [{ ...row, imapPort: 2, ifExists: "update" }],
+  });
+  assert.equal(upd.results[0].status, "error");
+  assert.equal(upd.results[0].canAddAnyway, true);
+  const upd2 = await api("POST", "/accounts/bulk", {
+    mailboxes: [{ ...row, imapPort: 2, ifExists: "update", addIfFails: true }],
+  });
+  assert.equal(upd2.results[0].status, "updated");
+  assert.equal(upd2.results[0].working, false);
+  const after = (await api("GET", `/accounts/${r.accountId}`)).account;
+  assert.equal(after.config.imap.port, 2);
+  assert.equal(after.status, "error");
+});

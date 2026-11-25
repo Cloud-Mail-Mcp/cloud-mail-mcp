@@ -18,6 +18,7 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
   const log = createLogger(opts.embedded ? "worker(embedded)" : "worker");
   const SYNC_EVERY_MS = Number(process.env.SYNC_INTERVAL_SECONDS ?? 300) * 1000;
   const FULL_EVERY_MS = 24 * 60 * 60_000;
+  const AUTH_RETRY_MS = 60 * 60_000;
   const MIGRATE_EVERY_MS = Number(process.env.MIGRATION_INTERVAL_SECONDS ?? 120) * 1000;
   const { db, jobs, sync, migrations } = svc;
   await jobs.start();
@@ -69,10 +70,21 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
   // ─────────── Scheduler ───────────
   async function scheduleDue() {
     const rows = await db
-      .select({ id: accounts.id, lastSyncAt: accounts.lastSyncAt, settings: accounts.settings })
+      .select({
+        id: accounts.id,
+        status: accounts.status,
+        lastSyncAt: accounts.lastSyncAt,
+        settings: accounts.settings,
+      })
       .from(accounts)
       .where(ne(accounts.status, "disabled"));
     for (const a of rows) {
+      // A rejected login is retried hourly (the password may have been fixed on the server),
+      // not every few minutes: repeated failed logins can get this server blocked.
+      if (a.status === "auth_error") {
+        const failedAt = Date.parse((a.settings as { failedAt?: string })?.failedAt ?? "") || 0;
+        if (Date.now() - failedAt < AUTH_RETRY_MS) continue;
+      }
       const lastFull = Date.parse((a.settings as { lastFullAt?: string })?.lastFullAt ?? "") || 0;
       const due = !a.lastSyncAt || Date.now() - a.lastSyncAt.getTime() > SYNC_EVERY_MS;
       const fullDue = a.lastSyncAt && Date.now() - lastFull > FULL_EVERY_MS;

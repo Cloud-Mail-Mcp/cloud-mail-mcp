@@ -395,10 +395,15 @@ export class SyncService {
           `Provider rate limit: ${err.message}`.slice(0, 500),
         );
       } else {
+        // failedAt: the scheduler retries a rejected login hourly, not every few minutes
+        // (repeated failed logins can get this server blocked by the mail host).
         await this.setStatus(
           accountId,
           f.code === "AUTH_FAILED" ? "auth_error" : "error",
           f.message,
+          {
+            settings: sql`${accounts.settings} || ${JSON.stringify({ failedAt: new Date().toISOString() })}::jsonb`,
+          },
         );
       }
       log.error("sync failed", { err: (err as Error).message, code: f.code });

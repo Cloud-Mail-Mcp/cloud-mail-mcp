@@ -150,7 +150,14 @@ export class AccountService {
       label?: string;
       config: unknown;
     },
-    opts: { actorType?: "user" | "agent" } = {},
+    opts: {
+      actorType?: "user" | "agent";
+      /**
+       * Save it even if the login test fails (e.g. the password changed): it's added as not
+       * working, isn't synced, and the person fixes the login later.
+       */
+      addIfFails?: boolean;
+    } = {},
   ) {
     const manifest = this.registry.get(input.moduleId);
     const config = this.parseConfig(manifest, input.config);
@@ -178,12 +185,14 @@ export class AccountService {
         );
     }
 
-    let probe: Awaited<ReturnType<AccountService["probe"]>>;
+    let probe: Awaited<ReturnType<AccountService["probe"]>> | null = null;
+    let failure: ReturnType<typeof friendlyError> | null = null;
     try {
       probe = await this.probe(manifest, address, config);
     } catch (err) {
-      const f = friendlyError(err);
-      throw new AccountError(f.message, 422, { code: f.code, hint: f.hint });
+      failure = friendlyError(err);
+      if (!opts.addIfFails)
+        throw new AccountError(failure.message, 422, { code: failure.code, hint: failure.hint });
     }
 
     const id = crypto.randomUUID();
@@ -198,11 +207,20 @@ export class AccountService {
         label: input.label?.trim() || (existing.length ? serverName(config) : null),
         credentialsEnc: encryptJson(dataKey, config, id),
         dataKeyEnc: wrapped,
-        status: "pending",
-        statusMessage: "Connected. Waiting for first sync.",
-        settings: { traits: probe.identity.traits ?? {} },
+        ...(probe
+          ? {
+              status: "pending" as const,
+              statusMessage: "Connected. Waiting for first sync.",
+              settings: { traits: probe.identity.traits ?? {} },
+            }
+          : {
+              status:
+                failure?.code === "AUTH_FAILED" ? ("auth_error" as const) : ("error" as const),
+              statusMessage: `Added without a working login: ${failure?.message ?? "the test failed"}`,
+              settings: { failedAt: new Date().toISOString() },
+            }),
       });
-      await this.upsertFolders(tx as unknown as Db, id, probe.remote);
+      if (probe) await this.upsertFolders(tx as unknown as Db, id, probe.remote);
       // Give the other logins for this address a label too, so they can be told apart.
       for (const row of existing) {
         if (row.label) continue;
@@ -223,7 +241,7 @@ export class AccountService {
       accountId: id,
       action: "account.create",
       target: address,
-      detail: { module: manifest.id },
+      detail: { module: manifest.id, ...(failure ? { notWorking: failure.message } : {}) },
     });
     return this.get(orgId, id);
   }
@@ -250,6 +268,35 @@ export class AccountService {
       .groupBy(accounts.id)
       .orderBy(accounts.address, accounts.createdAt);
     return rows;
+  }
+
+  /** Mailboxes connected with this address, with the IMAP server each one uses. */
+  async findByAddress(orgId: string, address: string) {
+    const rows = await this.db
+      .select()
+      .from(accounts)
+      .where(
+        and(eq(accounts.orgId, orgId), sql`lower(${accounts.address}) = ${address.toLowerCase()}`),
+      );
+    return rows.map((row) => {
+      let imapHost: string | null = null;
+      try {
+        imapHost = String((this.decrypt(row).imap as { host?: string } | undefined)?.host ?? "");
+      } catch {}
+      return { id: row.id, label: row.label, imapHost };
+    });
+  }
+
+  /** Mark a mailbox as not working (its settings were saved although the login test failed). */
+  async markFailed(id: string, err: AccountError) {
+    await this.db
+      .update(accounts)
+      .set({
+        status: err.detail?.code === "AUTH_FAILED" ? "auth_error" : "error",
+        statusMessage: `Saved without a working login: ${err.message}`,
+        settings: sql`${accounts.settings} || ${JSON.stringify({ failedAt: new Date().toISOString() })}::jsonb`,
+      })
+      .where(eq(accounts.id, id));
   }
 
   /** Load an account row without an org check (worker / internal use). */
