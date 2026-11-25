@@ -111,8 +111,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **AI sorting** (optional; uses your Anthropic API key, Claude Haiku 5.5 by default): every new
   inbox message is tagged by what it is: personal, solicitation, marketing, newsletter, social
   media, notifications, receipts & bills, security or spam. Tags and their descriptions are
-  editable, and each tag can leave mail in the inbox, mark it read, archive it, or move it to
-  Spam. A daily limit caps the cost, and **Sort older mail** tags the last 7, 30 or 90 days.
+  editable, and each tag can leave mail in the inbox, mark it read, archive it, move it to
+  Spam, or move it to a folder you name (created in each mailbox when first needed). A daily limit caps the cost, and **Sort older mail** tags the last 7, 30 or 90 days.
 - It learns from you: change a message's **Kind** (or mark it spam) and that sender's next
   messages get the same tag without asking the AI; recent corrections are shown to Claude as
   examples.

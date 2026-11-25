@@ -4,12 +4,14 @@ import { Link } from "wouter";
 import { Alert, Button, Card, Checkbox, Field, Input, PageHeader, Spinner } from "../components/ui";
 import { type ApiError, api } from "../lib/api";
 
-type Action = "none" | "mark_read" | "archive" | "spam";
+type Action = "none" | "mark_read" | "archive" | "spam" | "folder";
 interface Tag {
   id: string;
   name: string;
   description: string;
   action: Action;
+  /** For "folder": the folder the mail moves to. */
+  folder: string;
 }
 interface Sorter {
   enabled: boolean;
@@ -37,6 +39,7 @@ const ACTIONS: Record<Action, string> = {
   mark_read: "Mark as read",
   archive: "Archive",
   spam: "Move to Spam",
+  folder: "Move to a folder…",
 };
 const slug = (s: string) =>
   s
@@ -189,7 +192,12 @@ function SorterCards() {
           <Button
             variant="ghost"
             onClick={() =>
-              set({ tags: [...d.tags, { id: "", name: "", description: "", action: "none" }] })
+              set({
+                tags: [
+                  ...d.tags,
+                  { id: "", name: "", description: "", action: "none", folder: "" },
+                ],
+              })
             }
           >
             Add tag
@@ -199,7 +207,8 @@ function SorterCards() {
         <div className="space-y-3">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Each message gets one tag. The description tells Claude what belongs there. The action
-            runs on new mail that gets the tag (changing a tag on a message never moves it).
+            runs on new mail that gets the tag (changing a tag on a message never moves it). A
+            folder that doesn't exist yet is created in each mailbox the first time it's needed.
           </p>
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {d.tags.map((t, i) => (
@@ -230,18 +239,34 @@ function SorterCards() {
                   onChange={(e) => setTag(i, { description: e.target.value })}
                   className={field}
                 />
-                <select
-                  aria-label={`Action for ${t.name || "this tag"}`}
-                  value={t.action}
-                  onChange={(e) => setTag(i, { action: e.target.value as Action })}
-                  className={`${field} self-start`}
-                >
-                  {(Object.keys(ACTIONS) as Action[]).map((a) => (
-                    <option key={a} value={a}>
-                      {ACTIONS[a]}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1.5 self-start">
+                  <select
+                    aria-label={`Action for ${t.name || "this tag"}`}
+                    value={t.action}
+                    onChange={(e) =>
+                      setTag(i, {
+                        action: e.target.value as Action,
+                        // Suggest the tag's name as the folder.
+                        ...(e.target.value === "folder" && !t.folder ? { folder: t.name } : {}),
+                      })
+                    }
+                    className={field}
+                  >
+                    {(Object.keys(ACTIONS) as Action[]).map((a) => (
+                      <option key={a} value={a}>
+                        {ACTIONS[a]}
+                      </option>
+                    ))}
+                  </select>
+                  {t.action === "folder" && (
+                    <Input
+                      aria-label={`Folder for ${t.name || "this tag"}`}
+                      placeholder="Folder name"
+                      value={t.folder ?? ""}
+                      onChange={(e) => setTag(i, { folder: e.target.value })}
+                    />
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   className="self-start"

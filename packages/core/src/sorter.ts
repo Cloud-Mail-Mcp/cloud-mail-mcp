@@ -6,6 +6,7 @@ import {
   type Db,
   desc,
   eq,
+  folders,
   inArray,
   messages,
   pgArray,
@@ -20,7 +21,6 @@ import type { MessageChecks } from "./checks";
 import type { MailService } from "./mail";
 import type { Access } from "./policy";
 import type { SettingsService, SettingValue } from "./settings";
-import type { SorterTag } from "./sorter-tags";
 import type { SyncService } from "./sync";
 
 /** Messages per AI request, and per run of one account. */
@@ -42,7 +42,7 @@ function systemAccess(orgId: string, accountId: string): Access {
         accountId,
         {
           grantId: null,
-          scopes: new Set(["mail:read", "mail:organize"]),
+          scopes: new Set(["mail:read", "mail:organize", "folders:manage"]),
           folderAllow: null,
           folderDeny: null,
           sendPolicy: "deny",
@@ -240,17 +240,27 @@ export class SorterService {
     }
 
     // 4. Each tag's action, for mail still in the inbox.
-    const byAction = new Map<SorterTag["action"], number[]>();
+    // Grouped by action, and by folder for "move to folder".
+    const byAction = new Map<string, number[]>();
     for (const [id, t] of decided) {
-      const action = tags.get(t)?.action ?? "none";
-      if (action === "none") continue;
-      byAction.set(action, [...(byAction.get(action) ?? []), id]);
+      const tag = tags.get(t);
+      if (!tag || tag.action === "none") continue;
+      const key = tag.action === "folder" ? `folder:${tag.folder}` : tag.action;
+      byAction.set(key, [...(byAction.get(key) ?? []), id]);
     }
     for (const [action, ids] of byAction) {
       try {
         if (action === "mark_read") await this.deps.mail.markMessages(access, ids, { read: true });
         else if (action === "archive") await this.deps.mail.move(access, ids, "archive");
         else if (action === "spam") await this.deps.mail.move(access, ids, "spam");
+        else if (action.startsWith("folder:")) {
+          const folderId = await this.folderNamed(
+            access,
+            accountId,
+            action.slice("folder:".length),
+          );
+          await this.deps.mail.move(access, ids, folderId);
+        }
         result.acted += ids.length;
       } catch (e) {
         this.deps.log.warn("sorter action failed", { action, err: (e as Error).message });
@@ -258,6 +268,31 @@ export class SorterService {
     }
     result.more = full && !result.error && result.blocked + result.remembered + result.sorted > 0;
     return result;
+  }
+
+  /**
+   * The mailbox's folder with this name (ignoring case and an "INBOX." / "INBOX/" prefix, which
+   * some servers require), created when it doesn't exist yet.
+   */
+  private async folderNamed(access: Access, accountId: string, name: string): Promise<number> {
+    const key = (p: string) =>
+      p
+        .toLowerCase()
+        .replace(/^inbox[./]/, "")
+        .replace(/[./]/g, "/");
+    const find = async () =>
+      (
+        await this.db
+          .select({ id: folders.id, path: folders.path })
+          .from(folders)
+          .where(eq(folders.accountId, accountId))
+      ).find((f) => key(f.path) === key(name))?.id;
+    const found = await find();
+    if (found) return found;
+    await this.deps.mail.createFolder(access, accountId, name);
+    const created = await find();
+    if (!created) throw new Error(`Couldn't find the folder "${name}" after creating it.`);
+    return created;
   }
 
   private async usage(add: {

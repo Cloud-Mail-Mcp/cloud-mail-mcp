@@ -137,7 +137,9 @@ before(async () => {
             ? "social"
             : /pitch/i.test(subject ?? "")
               ? "solicitation"
-              : "personal",
+              : /newsletter/i.test(subject ?? "")
+                ? "newsletter"
+                : "personal",
         }),
       );
       res.writeHead(200, { "content-type": "application/json" });
@@ -301,7 +303,11 @@ test("AI sorter: blocked senders, remembered senders, then Claude; tag actions r
       ...(savedSorter as object),
       enabled: true,
       tags: (savedSorter as { tags: Array<{ id: string }> }).tags.map((t) =>
-        t.id === "social" ? { ...t, action: "archive" } : t,
+        t.id === "social"
+          ? { ...t, action: "archive" }
+          : t.id === "newsletter"
+            ? { ...t, action: "folder", folder: "Newsletters" }
+            : t,
       ),
       instructions: "Mail from @partner.example is from colleagues.",
     },
@@ -312,6 +318,7 @@ test("AI sorter: blocked senders, remembered senders, then Claude; tag actions r
     raw("Spammer <win@junk.example>", `You won ${run}`),
     raw("Bank <alerts@bank.example>", `New sign-in ${run}`),
     raw("LinkedIn <notify@linkedin.example>", `LinkedIn: you appeared in searches ${run}`),
+    raw("The Weekly <news@weekly.example>", `Weekly newsletter ${run}`),
     raw(
       "Sam Seller <sam@agency.example>",
       `Quick pitch ${run}`,
@@ -324,7 +331,7 @@ test("AI sorter: blocked senders, remembered senders, then Claude; tag actions r
   assert.equal(r.error, undefined);
   assert.equal(r.blocked, 1, "blocked domain → Spam without asking the AI");
   assert.equal(r.remembered, 1, "alerts@bank.example was tagged security by a person");
-  assert.ok(r.sorted >= 2);
+  assert.ok(r.sorted >= 3);
   await syncNow();
 
   assert.deepEqual((await find(`You won ${run}`))?.folders, ["Junk"]);
@@ -333,6 +340,9 @@ test("AI sorter: blocked senders, remembered senders, then Claude; tag actions r
   assert.deepEqual(social?.tags, ["social"]);
   assert.deepEqual(social?.folders, ["Archive"], "the social tag's action archived it");
   assert.deepEqual((await find(`Quick pitch ${run}`))?.tags, ["solicitation"]);
+  const news = await find(`Weekly newsletter ${run}`);
+  assert.deepEqual(news?.folders, ["Newsletters"], "moved to the tag's folder, created on demand");
+  assert.deepEqual(news?.tags, ["newsletter"]);
 
   // What the AI was shown: tag list, the owner's guidance and corrections, mail as data.
   const prompt = asked.join("\n");

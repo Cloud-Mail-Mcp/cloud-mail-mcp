@@ -162,7 +162,7 @@ export interface MessageChecks {
 export interface MailTag {
   id: string;
   name: string;
-  action: "none" | "mark_read" | "archive" | "spam";
+  action: "none" | "mark_read" | "archive" | "spam" | "folder";
   inbox: number;
   unread: number;
 }
