@@ -3,7 +3,10 @@ import { accounts, and, eq, folders, ne, sql } from "@mailmcp/db";
 import type { RemoteFolder } from "@mailmcp/module-sdk";
 import { QUEUES, type SyncJob } from "./jobs";
 import { createLogger } from "./logger";
+import { MailService } from "./mail";
+import { PolicyService } from "./policy";
 import type { Services } from "./services";
+import { SorterService } from "./sorter";
 
 /**
  * The background worker, usable as its own process (Docker, development) or embedded in the
@@ -44,6 +47,8 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
             sql`UPDATE accounts SET settings = jsonb_set(settings, '{lastFullAt}', to_jsonb(now()::text)) WHERE id = ${accountId}`,
           );
         }
+        // New mail: sort it (blocked senders, AI tags).
+        if (r.upserts > 0) await jobs.enqueueSort(accountId).catch(() => {});
         // Keep downloading bodies in short slices so new mail is never stuck behind a backfill.
         if (r.moreBodies)
           await jobs.enqueueSync({ accountId, reason: "bodies" }, { delaySeconds: 2 });
@@ -51,6 +56,32 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
         // Account deleted mid-job: nothing to retry.
         if (/not found/i.test((err as Error).message)) return;
         throw err;
+      }
+    },
+  );
+
+  // Sorting new mail: one run at a time per account; big backlogs continue in further runs.
+  const sorter = new SorterService({
+    db,
+    settings: svc.settings,
+    accounts: svc.accounts,
+    sync,
+    mail: new MailService(svc, new PolicyService(db)),
+    log,
+  });
+  await jobs.boss.work<{ accountId: string }>(
+    QUEUES.sort,
+    { localConcurrency: 2, batchSize: 1 },
+    async ([job]) => {
+      if (!job) return;
+      try {
+        const r = await sorter.runAccount(job.data.accountId);
+        if (r.blocked || r.remembered || r.sorted || r.error)
+          log.info("sorted new mail", { accountId: job.data.accountId, ...r });
+        if (r.more) await jobs.enqueueSort(job.data.accountId).catch(() => {});
+      } catch (err) {
+        if (/not found/i.test((err as Error).message)) return;
+        log.warn("sorting failed", { accountId: job.data.accountId, err: (err as Error).message });
       }
     },
   );

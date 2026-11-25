@@ -9,6 +9,7 @@ const nav: Array<{ href: string; label: string; soon?: boolean }> = [
   { href: "/agents", label: "Agents" },
   { href: "/permissions", label: "Permissions" },
   { href: "/approvals", label: "Approvals" },
+  { href: "/sorting", label: "Spam & sorting" },
   { href: "/audit", label: "Audit log" },
   { href: "/migrations", label: "Migrations" },
   { href: "/accounts", label: "Accounts" },

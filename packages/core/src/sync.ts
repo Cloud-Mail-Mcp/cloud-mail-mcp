@@ -30,6 +30,7 @@ import type { MailDoc, SearchIndex } from "@mailmcp/search";
 import { blobKeys } from "@mailmcp/storage";
 import type { AccountRow, AccountService } from "./accounts";
 import type { BlobService } from "./blobs";
+import { parseChecks } from "./checks";
 import { friendlyError } from "./errors";
 import { createLogger } from "./logger";
 import { type ParsedBody, parseRaw, sha256, snippetOf } from "./parse";
@@ -213,6 +214,8 @@ export class BodyService {
           // Remember how to unsubscribe (null = no List-Unsubscribe header).
           headersExtra: sql`coalesce(${messages.headersExtra}, '{}'::jsonb) || ${JSON.stringify({
             unsubscribe: parseUnsubscribe(raw),
+            // Sender checks and spam score from the receiving server.
+            checks: parseChecks(raw),
           })}::jsonb`,
           snippet: snippetOf(parsed.text),
           hasAttachments: parsed.attachments.some((a) => !a.inline),
@@ -646,6 +649,23 @@ export class SyncService {
           inserted: sql<boolean>`(xmax = 0)`,
         });
       const byRemote = new Map(msgRows.map((m) => [m.remoteId, m]));
+
+      // A message moved to another folder comes back as a new row (new UID there; the old row
+      // is cleaned up at the end of the sync). Keep its tags so a move doesn't lose them.
+      const fresh = msgRows.filter((m) => m.inserted).map((m) => m.id);
+      if (fresh.length)
+        await tx.execute(sql`
+          UPDATE messages n SET tags = o.tags, sorted_at = o.sorted_at
+          FROM (
+            SELECT DISTINCT ON (x.id) x.id, p.tags, p.sorted_at
+            FROM messages x
+            JOIN messages p ON p.account_id = x.account_id AND p.message_id_hdr = x.message_id_hdr
+              AND p.id <> x.id AND p.sorted_at IS NOT NULL
+            WHERE x.account_id = ${row.id} AND x.id = ANY(${pgArray(fresh, "bigint")})
+              AND x.message_id_hdr IS NOT NULL
+            ORDER BY x.id, p.sorted_at DESC
+          ) o
+          WHERE n.account_id = ${row.id} AND n.id = o.id`);
 
       // 4. Folder membership
       await tx

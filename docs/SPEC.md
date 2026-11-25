@@ -296,9 +296,9 @@ Default is **deny**: an agent sees nothing until it has a **grant** on an accoun
 | Group    | Tools                                                                                           |
 | -------- | ----------------------------------------------------------------------------------------------- |
 | Discover | `list_accounts`, `list_folders`, `get_account_instructions`                                     |
-| Read     | `search_messages`, `list_messages`, `get_message`, `get_thread`, `get_attachment`               |
+| Read     | `search_messages`, `list_messages`, `get_message`, `get_thread`, `get_attachment`, `list_tags`  |
 | Compose  | `create_draft`, `update_draft`, `send_draft`, `send_message`, `reply`, `forward`                |
-| Organize | `move_messages`, `mark_messages`, `label_messages`                                              |
+| Organize | `move_messages`, `mark_messages`, `mark_spam`, `tag_messages`                                   |
 | Delete   | `delete_messages` (trash; `permanent: true` needs the extra scope)                              |
 | Lists    | `unsubscribe` (one-click POST, else unsubscribe email under the send policy, else the web link) |
 | Folders  | `create_folder`, `rename_folder`, `delete_folder`                                               |

@@ -1,3 +1,4 @@
+import { MailError } from "@mailmcp/core";
 import { parseSort } from "@mailmcp/search";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -23,6 +24,7 @@ export async function mailRoutes(app: FastifyInstance, d: AppDeps) {
         accountId: z.uuid().optional(),
         folder: z.string().optional(),
         unread: z.coerce.boolean().optional(),
+        tag: z.string().max(30).optional(),
         limit: z.coerce.number().int().min(1).max(100).optional(),
         cursor: z.string().optional(),
         sort: z.enum(["date", "from", "subject"]).optional(),
@@ -87,6 +89,37 @@ export async function mailRoutes(app: FastifyInstance, d: AppDeps) {
   app.post("/api/v1/mail/messages/move", { preHandler: writer }, async (req) => {
     const b = z.object({ ids: IdList, folder: z.union([z.string(), z.number()]) }).parse(req.body);
     return d.mail.move(await access(req), b.ids, b.folder);
+  });
+
+  app.post("/api/v1/mail/messages/spam", { preHandler: writer }, async (req) => {
+    const b = z
+      .object({ ids: IdList, spam: z.boolean().default(true), blockSender: z.boolean().optional() })
+      .parse(req.body);
+    return d.mail.markSpam(await access(req), b.ids, b);
+  });
+
+  app.post("/api/v1/mail/messages/tags", { preHandler: writer }, async (req) => {
+    const b = z.object({ ids: IdList, tags: z.array(z.string().max(30)).max(5) }).parse(req.body);
+    const known = new Set((await d.settings.get("sorter")).tags.map((t) => t.id));
+    const unknown = b.tags.filter((t) => !known.has(t));
+    if (unknown.length) throw new MailError(`Unknown tag: ${unknown.join(", ")}`, 400);
+    return d.mail.setTags(await access(req), b.ids, b.tags);
+  });
+
+  /** The configured tags with inbox counts, for the mail view's tag filter. */
+  app.get("/api/v1/mail/tags", { preHandler: auth }, async (req) => {
+    const cfg = await d.settings.get("sorter");
+    const counts = new Map((await d.mail.tagCounts(await access(req))).map((c) => [c.tag, c]));
+    return {
+      enabled: cfg.enabled,
+      tags: cfg.tags.map((t) => ({
+        id: t.id,
+        name: t.name,
+        action: t.action,
+        inbox: counts.get(t.id)?.total ?? 0,
+        unread: counts.get(t.id)?.unread ?? 0,
+      })),
+    };
   });
 
   app.post("/api/v1/mail/messages/delete", { preHandler: writer }, async (req) => {

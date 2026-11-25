@@ -426,6 +426,7 @@ export class ImapConnector implements Connector {
     change: {
       add?: Partial<Omit<MessageFlags, "keywords">>;
       remove?: Partial<Omit<MessageFlags, "keywords">>;
+      keywords?: { add?: string[]; remove?: string[] };
     },
   ): Promise<void> {
     const names: Record<string, string> = {
@@ -439,8 +440,10 @@ export class ImapConnector implements Connector {
         .filter(([, v]) => v)
         .map(([k]) => names[k])
         .filter((v): v is string => !!v);
-    const add = pick(change.add);
-    const remove = pick(change.remove);
+    // Keywords are atoms: no spaces, parentheses, quotes, % * ] or backslashes.
+    const kw = (list?: string[]) => (list ?? []).filter((k) => /^\$?[A-Za-z0-9_.-]{1,64}$/.test(k));
+    const add = [...pick(change.add), ...kw(change.keywords?.add)];
+    const remove = [...pick(change.remove), ...kw(change.keywords?.remove)];
     await this.inFolder(folder, false, async (client) => {
       const range = this.uids(refs);
       if (add.length) await client.messageFlagsAdd(range, add, { uid: true });

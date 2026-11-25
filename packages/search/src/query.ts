@@ -1,6 +1,7 @@
 /**
  * One search syntax for every account and provider (docs/SPEC.md §7), e.g.
  *   from:alice subject:"q3 invoice" has:attachment after:2026-01-01 in:inbox is:unread budget
+ *   tag:newsletter in:inbox
  */
 export interface ParsedQuery {
   text: string[]; // free-text terms (quoted phrases kept whole)
@@ -8,6 +9,7 @@ export interface ParsedQuery {
   to: string[];
   subject: string[];
   in: string[]; // folder path or role
+  tags: string[]; // tag:social (AI sorter or a person)
   after?: Date;
   before?: Date;
   hasAttachment?: boolean;
@@ -18,7 +20,7 @@ export interface ParsedQuery {
 const TOKEN = /(-?)(\w+):("[^"]*"|\S+)|"([^"]*)"|(\S+)/g;
 
 export function parseQuery(input: string): ParsedQuery {
-  const q: ParsedQuery = { text: [], from: [], to: [], subject: [], in: [] };
+  const q: ParsedQuery = { text: [], from: [], to: [], subject: [], in: [], tags: [] };
   for (const m of input.matchAll(TOKEN)) {
     const [, , field, rawValue, phrase, word] = m;
     if (field && rawValue !== undefined) {
@@ -35,6 +37,9 @@ export function parseQuery(input: string): ParsedQuery {
           break;
         case "in":
           q.in.push(value.toLowerCase());
+          break;
+        case "tag":
+          q.tags.push(value.toLowerCase());
           break;
         case "after":
           q.after = parseDate(value) ?? q.after;

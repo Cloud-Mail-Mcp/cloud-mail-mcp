@@ -6,6 +6,7 @@ import {
   AccountError,
   AgentService,
   ApprovalService,
+  createLogger,
   createServices,
   MailError,
   MailService,
@@ -13,6 +14,7 @@ import {
   OAuthService,
   PolicyService,
   type Services,
+  SorterService,
 } from "@mailmcp/core";
 import { type Db, sql } from "@mailmcp/db";
 import imapModule from "@mailmcp/module-imap";
@@ -31,6 +33,7 @@ import { mailRoutes } from "./routes/mail";
 import { migrationRoutes } from "./routes/migrations";
 import { CORS_PATHS, oauthRoutes } from "./routes/oauth";
 import { settingsRoutes } from "./routes/settings";
+import { sorterRoutes } from "./routes/sorter";
 import { systemRoutes } from "./routes/system";
 
 /** Installed connector modules. Phase 2 adds msgraph / gmail here. */
@@ -44,6 +47,7 @@ export interface AppDeps extends Services {
   approvals: ApprovalService;
   oauth: OAuthService;
   masterKeyInfo: { source: "env" | "file" | "generated"; path?: string };
+  sorter: SorterService;
 }
 
 export async function buildApp(opts: {
@@ -78,6 +82,14 @@ export async function buildApp(opts: {
     oauth: new OAuthService(opts.db, policy, agentsSvc),
     approvals: new ApprovalService(opts.db, mail, policy),
     masterKeyInfo: opts.masterKeyInfo,
+    sorter: new SorterService({
+      db: opts.db,
+      settings: services.settings,
+      accounts: services.accounts,
+      sync: services.sync,
+      mail,
+      log: createLogger("sorter"),
+    }),
   };
 
   await app.register(fastifyCookie);
@@ -152,6 +164,7 @@ export async function buildApp(opts: {
   await app.register(async (r) => authRoutes(r, deps));
   await app.register(async (r) => accountRoutes(r, deps));
   await app.register(async (r) => settingsRoutes(r, deps));
+  await app.register(async (r) => sorterRoutes(r, deps));
   await app.register(async (r) => systemRoutes(r, deps));
   await app.register(async (r) => mailRoutes(r, deps));
   await app.register(async (r) => agentRoutes(r, deps));

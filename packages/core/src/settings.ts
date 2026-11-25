@@ -3,6 +3,7 @@ import { z } from "zod";
 import { audit } from "./audit";
 import { decryptJson, encryptJson } from "./crypto";
 import { clone, deletePath, getPath, setPath } from "./paths";
+import { DEFAULT_TAGS, SorterTagSchema } from "./sorter-tags";
 
 /**
  * Instance settings managed in the admin panel (stored in `app_settings`).
@@ -58,6 +59,29 @@ export const settingDefs = {
         .default("claude-opus-5-5"),
     }),
     secretFields: ["apiKey"],
+  },
+  /**
+   * AI sorting: tags each new message by what it is (Settings → AI sorting), using the Anthropic
+   * API key from Settings → Assistant. Tags can move mail on their own (e.g. spam → Spam).
+   */
+  sorter: {
+    schema: z.object({
+      enabled: z.boolean().default(false),
+      model: z.enum(["claude-haiku-5-5", "claude-sonnet-5-5"]).default("claude-haiku-5-5"),
+      tags: z
+        .array(SorterTagSchema)
+        .min(1)
+        .max(30)
+        .refine((t) => new Set(t.map((x) => x.id)).size === t.length, "Each tag needs its own id.")
+        .default(DEFAULT_TAGS),
+      /** Extra guidance for the AI, e.g. "Mail from @mycompany.example is from colleagues". */
+      instructions: z.string().trim().max(2000).default(""),
+      /** Most messages the AI sorts per day (cost limit). */
+      dailyLimit: z.number().int().min(0).max(100_000).default(2000),
+      /** Also sort inbox mail from this date on (set by "Sort older mail"). */
+      backfillFrom: z.string().nullable().default(null),
+    }),
+    secretFields: [],
   },
   /** How the admin panel shows mail. */
   mail: {

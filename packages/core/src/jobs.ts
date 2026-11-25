@@ -7,6 +7,8 @@ export const QUEUES = {
   send: "send-message",
   /** One pass of an account → account migration (one at a time per migration). */
   migrate: "migrate-mail",
+  /** AI sorting / blocked senders for an account's new mail (one at a time per account). */
+  sort: "sort-mail",
 } as const;
 
 /**
@@ -46,6 +48,11 @@ export class Jobs {
         retryLimit: 0,
         expireInSeconds: 30 * 60,
       });
+      await this.boss.createQueue(QUEUES.sort, {
+        policy: "stately",
+        retryLimit: 0,
+        expireInSeconds: 15 * 60,
+      });
       await this.boss.createQueue(QUEUES.send, {
         retryLimit: 3,
         retryDelay: 30,
@@ -62,6 +69,15 @@ export class Jobs {
       startAfter: opts.delaySeconds,
       heartbeatSeconds: HEARTBEAT_SECONDS,
     });
+  }
+
+  async enqueueSort(accountId: string) {
+    await this.start();
+    return this.boss.send(
+      QUEUES.sort,
+      { accountId },
+      { singletonKey: accountId, heartbeatSeconds: HEARTBEAT_SECONDS },
+    );
   }
 
   async enqueueMigration(migrationId: string, opts: { delaySeconds?: number } = {}) {

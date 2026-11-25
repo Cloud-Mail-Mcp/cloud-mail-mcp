@@ -171,6 +171,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^1.12.0
+        version: 1.12.0(zod@4.6.7)
       '@mailmcp/db':
         specifier: workspace:*
         version: link:../db

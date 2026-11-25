@@ -9,6 +9,8 @@ import {
   messages,
   pendingActions,
   pgArray,
+  senderRules,
+  sorterExamples,
   sql,
 } from "@mailmcp/db";
 import type { EmailAddress, MessageRef, OutboundMessage, RemoteFolder } from "@mailmcp/module-sdk";
@@ -24,6 +26,7 @@ import {
 } from "@mailmcp/search";
 import type { AccountRow } from "./accounts";
 import { audit } from "./audit";
+import { type MessageChecks, parseChecks } from "./checks";
 import { attachmentFromRaw } from "./parse";
 import {
   type Access,
@@ -71,6 +74,8 @@ export interface MessageSummary {
   flagged: boolean;
   answered: boolean;
   hasAttachments: boolean;
+  /** What the message is (AI sorter or a person), e.g. ["newsletter"]. */
+  tags: string[];
 }
 
 export interface MessageDetail extends MessageSummary {
@@ -88,6 +93,8 @@ export interface MessageDetail extends MessageSummary {
     /** When it was unsubscribed through MailMCP. */
     unsubscribedAt: string | null;
   } | null;
+  /** Sender checks and spam score from the receiving mail server (null: it didn't say). */
+  checks: MessageChecks | null;
   attachments: Array<{
     id: number;
     filename: string | null;
@@ -116,6 +123,7 @@ type HeadersExtra = {
   references?: string[];
   unsubscribe?: UnsubscribeInfo | null;
   unsubscribedAt?: string;
+  checks?: MessageChecks | null;
 } | null;
 
 export type SendOutcome =
@@ -255,7 +263,7 @@ export class MailService {
     if (!refs.length) return [];
     const rows = (await this.db.execute(sql`
       SELECT m.id, m.account_id, a.address AS account, a.label AS account_label, m.thread_id, m.subject, m.from_name, m.from_email, m.date,
-             m.snippet, m.seen, m.flagged, m.answered, m.has_attachments,
+             m.snippet, m.seen, m.flagged, m.answered, m.has_attachments, m.tags,
              coalesce((SELECT array_agg(f.path ORDER BY f.path) FROM message_folders mf JOIN folders f ON f.id = mf.folder_id
                        WHERE mf.account_id = m.account_id AND mf.message_id = m.id), '{}') AS folders,
              coalesce((SELECT json_agg(json_build_object('name', ad.name, 'email', ad.email) ORDER BY ma.position)
@@ -291,6 +299,7 @@ export class MailService {
         flagged: Boolean(r.flagged),
         answered: Boolean(r.answered),
         hasAttachments: Boolean(r.has_attachments),
+        tags: (r.tags as string[] | null) ?? [],
       }));
   }
 
@@ -347,6 +356,8 @@ export class MailService {
       accountId?: string;
       folder?: string | number;
       unreadOnly?: boolean;
+      /** Only messages with this tag. */
+      tag?: string;
       limit?: number;
       cursor?: string;
       sort?: Sort;
@@ -371,7 +382,12 @@ export class MailService {
     if (!pairs.length) return { messages: [] };
     const sort = opts.sort ?? DEFAULT_SORT;
     const cursor = decodeCursor(opts.cursor);
-    const unread = opts.unreadOnly ? sql`AND NOT mf.seen` : sql``;
+    const unread = sql`${opts.unreadOnly ? sql`AND NOT mf.seen` : sql``} ${
+      opts.tag
+        ? sql`AND EXISTS (SELECT 1 FROM messages tm WHERE tm.account_id = mf.account_id
+            AND tm.id = mf.message_id AND tm.tags @> ARRAY[${opts.tag}]::text[])`
+        : sql``
+    }`;
     const pa = pgArray(
       pairs.map((p) => p.a),
       "uuid",
@@ -465,6 +481,7 @@ export class MailService {
     }
     const body = await this.s.sync.bodies.load(row, m!.bodyBlobKey);
     const unsub = await this.unsubscribeInfo(row, m!);
+    const checks = await this.checksInfo(row, m!);
     const method = unsubscribeMethod(unsub);
     const [summary] = await this.hydrate([{ accountId, messageId: id }]);
     const people = (await this.db.execute(sql`
@@ -501,6 +518,7 @@ export class MailService {
             unsubscribedAt: (m!.headersExtra as HeadersExtra)?.unsubscribedAt ?? null,
           }
         : null,
+      checks,
       attachments: atts.map((a) => ({
         id: Number(a.id),
         filename: a.filename,
@@ -803,6 +821,200 @@ export class MailService {
       })
       .where(and(eq(messages.accountId, m.accountId), eq(messages.id, m.id)));
     return info;
+  }
+
+  /** Sender checks and spam score; read from the raw message once for mail fetched before. */
+  private async checksInfo(
+    row: AccountRow,
+    m: typeof messages.$inferSelect,
+  ): Promise<MessageChecks | null> {
+    const extra = (m.headersExtra ?? {}) as NonNullable<HeadersExtra>;
+    if ("checks" in extra) return extra.checks ?? null;
+    if (m.bodyState !== "fetched" || !m.rawBlobKey) return null;
+    const raw = await this.s.sync.bodies.loadRaw(row, m.rawBlobKey).catch(() => null);
+    if (!raw) return null;
+    const checks = parseChecks(raw);
+    await this.db
+      .update(messages)
+      .set({
+        headersExtra: sql`coalesce(${messages.headersExtra}, '{}'::jsonb) || ${JSON.stringify({ checks })}::jsonb`,
+      })
+      .where(and(eq(messages.accountId, m.accountId), eq(messages.id, m.id)));
+    return checks;
+  }
+
+  // ───────────────────────────── spam and tags ─────────────────────────────
+
+  /**
+   * Spam: move to the account's Spam folder (servers such as Gmail and iCloud learn from that),
+   * tag it "spam", and optionally send the sender's future mail there too. Not spam: back to the
+   * inbox, and the sender is no longer blocked. People's choices teach the AI sorter.
+   */
+  async markSpam(
+    access: Access,
+    ids: number[],
+    opts: { spam: boolean; blockSender?: boolean },
+  ): Promise<{ moved: number; blockedSenders: string[] }> {
+    const byAccount = await this.resolve(access, ids, "mail:organize");
+    const info = await this.db
+      .select({ id: messages.id, fromEmail: messages.fromEmail, subject: messages.subject })
+      .from(messages)
+      .where(inArray(messages.id, ids));
+    const byId = new Map(info.map((r) => [r.id, r]));
+    let moved = 0;
+    const blockedSenders = new Set<string>();
+    for (const [accountId, { grant, items }] of byAccount) {
+      this.policy.checkRate(grant);
+      const dest = await this.folderFor(accountId, opts.spam ? "spam" : "inbox").catch(() => null);
+      if (!dest)
+        throw new MailError(
+          opts.spam ? "This account has no Spam (Junk) folder." : "This account has no Inbox.",
+        );
+      if (!folderAllowed(grant, dest.path, dest.role))
+        throw new AccessDenied(`You can't move mail into "${dest.path}".`);
+      // Not spam: only copies in Spam go back (a Gmail label elsewhere stays where it is).
+      const toMove = opts.spam
+        ? items
+        : items
+            .map((i) => ({ ...i, places: i.places.filter((p) => p.folder.role === "spam") }))
+            .filter((i) => i.places.length);
+      // $Junk / $NotJunk: the keywords mail apps use; some servers train their filter on them.
+      const groups = new Map<number, { folder: FolderRow; refs: MessageRef[] }>();
+      for (const it of toMove)
+        for (const p of it.places) {
+          if (!p.uid) continue;
+          const g = groups.get(p.folder.id) ?? { folder: p.folder, refs: [] };
+          g.refs.push({ remoteId: it.remoteId, remoteUid: p.uid });
+          groups.set(p.folder.id, g);
+        }
+      await this.s.pool
+        .use(accountId, async (c) => {
+          for (const g of groups.values())
+            await c.setFlags(asRemote(g.folder), g.refs, {
+              keywords: opts.spam
+                ? { add: ["$Junk"], remove: ["$NotJunk"] }
+                : { add: ["$NotJunk"], remove: ["$Junk"] },
+            });
+        })
+        .catch(() => {}); // servers that don't allow custom keywords
+      if (toMove.length) await this.moveWithin(accountId, toMove, dest);
+      moved += toMove.length;
+
+      const idList = items.map((i) => i.id);
+      await this.db
+        .update(messages)
+        .set({
+          tags: opts.spam
+            ? sql`ARRAY['spam']::text[]`
+            : sql`array_remove(${messages.tags}, 'spam')`,
+          sortedAt: new Date(),
+        })
+        .where(and(eq(messages.accountId, accountId), inArray(messages.id, idList)));
+
+      const senders = [
+        ...new Set(
+          idList.map((i) => byId.get(i)?.fromEmail?.toLowerCase()).filter((e): e is string => !!e),
+        ),
+      ];
+      if (opts.spam && opts.blockSender) {
+        for (const pattern of senders) {
+          await this.db
+            .insert(senderRules)
+            .values({
+              orgId: access.orgId,
+              accountId,
+              pattern,
+              createdBy: access.actor.type === "user" ? access.actor.id : null,
+            })
+            .onConflictDoNothing();
+          blockedSenders.add(pattern);
+        }
+      }
+      if (!opts.spam && senders.length) {
+        await this.db
+          .delete(senderRules)
+          .where(
+            and(
+              eq(senderRules.orgId, access.orgId),
+              sql`(${senderRules.accountId} = ${accountId} OR ${senderRules.accountId} IS NULL)`,
+              inArray(senderRules.pattern, senders),
+            ),
+          );
+      }
+      // A person's choice teaches the sorter (agents' don't: their judgement may be wrong).
+      if (access.actor.type === "user") {
+        for (const id of idList) {
+          const m = byId.get(id);
+          if (!m?.fromEmail) continue;
+          if (opts.spam) await this.learn(access.orgId, m.fromEmail, m.subject, "spam");
+          else
+            await this.db
+              .delete(sorterExamples)
+              .where(
+                and(
+                  eq(sorterExamples.orgId, access.orgId),
+                  eq(sorterExamples.fromEmail, m.fromEmail.toLowerCase()),
+                  eq(sorterExamples.tag, "spam"),
+                ),
+              );
+        }
+      }
+      await this.log(
+        access,
+        opts.spam ? "mail.spam" : "mail.not_spam",
+        accountId,
+        idList.join(","),
+        true,
+        opts.spam && opts.blockSender ? { blockSender: senders } : undefined,
+      );
+    }
+    return { moved, blockedSenders: [...blockedSenders] };
+  }
+
+  /** Set a message's tag (replacing the sorter's). A person's choice teaches the sorter. */
+  async setTags(access: Access, ids: number[], tags: string[]) {
+    const byAccount = await this.resolve(access, ids, "mail:organize");
+    const clean = [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 5);
+    for (const [accountId, { grant, items }] of byAccount) {
+      this.policy.checkRate(grant);
+      const idList = items.map((i) => i.id);
+      const rows = await this.db
+        .update(messages)
+        .set({ tags: sql`${pgArray(clean, "text")}`, sortedAt: new Date() })
+        .where(and(eq(messages.accountId, accountId), inArray(messages.id, idList)))
+        .returning({ fromEmail: messages.fromEmail, subject: messages.subject });
+      if (access.actor.type === "user" && clean[0])
+        for (const r of rows)
+          if (r.fromEmail) await this.learn(access.orgId, r.fromEmail, r.subject, clean[0]);
+      await this.log(access, "mail.tag", accountId, idList.join(","), true, { tags: clean });
+    }
+    return { updated: ids.length, tags: clean };
+  }
+
+  /** Remember how a person tagged mail from this sender (one example per sender). */
+  private async learn(orgId: string, fromEmail: string, subject: string | null, tag: string) {
+    await this.db
+      .insert(sorterExamples)
+      .values({ orgId, fromEmail: fromEmail.toLowerCase(), subject: subject?.slice(0, 200), tag })
+      .onConflictDoUpdate({
+        target: [sorterExamples.orgId, sorterExamples.fromEmail],
+        set: { tag, subject: subject?.slice(0, 200) ?? null, createdAt: new Date() },
+      });
+  }
+
+  /** Inbox messages per tag (and unread), across the actor's readable accounts. */
+  async tagCounts(access: Access) {
+    const ids = accountsWith(access, "mail:read");
+    if (!ids.length) return [];
+    const rows = (await this.db.execute(sql`
+      SELECT t.tag, count(*)::int AS total, count(*) FILTER (WHERE NOT mf.seen)::int AS unread
+      FROM message_folders mf
+      JOIN folders f ON f.id = mf.folder_id AND f.role = 'inbox'
+      JOIN messages m ON m.account_id = mf.account_id AND m.id = mf.message_id
+      CROSS JOIN LATERAL unnest(m.tags) AS t(tag)
+      WHERE mf.account_id = ANY(${pgArray(ids, "uuid")})
+      GROUP BY t.tag`)) as unknown as Array<{ tag: string; total: number; unread: number }>;
+    return rows;
   }
 
   /**

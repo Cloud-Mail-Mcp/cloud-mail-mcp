@@ -211,6 +211,10 @@ export const messages = pgTable(
     bodyBlobKey: text("body_blob_key"),
     bodyState: bodyState("body_state").notNull().default("none"),
     headersExtra: jsonb("headers_extra"),
+    /** What the message is (AI sorter or a person): tag ids from Settings → AI sorting. */
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    /** When the sorter (sender rules, corrections or AI) looked at it. Null: not yet. */
+    sortedAt: timestamp("sorted_at", { withTimezone: true }),
     /** Used by the `postgres` search driver; ignored by other drivers. */
     searchTsv: tsvector("search_tsv"),
     createdAt: createdAt(),
@@ -224,6 +228,7 @@ export const messages = pgTable(
     index("messages_account_thread_idx").on(t.accountId, t.threadId),
     index("messages_account_msgid_idx").on(t.accountId, t.messageIdHdr),
     index("messages_search_tsv_idx").using("gin", t.searchTsv),
+    index("messages_tags_idx").using("gin", t.tags),
   ],
 );
 
@@ -597,3 +602,57 @@ export const accountDrafts = pgTable(
   },
   (t) => [index("account_drafts_org_idx").on(t.orgId)],
 );
+
+/**
+ * Senders whose mail goes straight to Spam (set with "Spam → also future mail from this sender").
+ * `pattern` is an address ("deals@shop.example") or a whole domain ("@shop.example").
+ */
+export const senderRules = pgTable(
+  "sender_rules",
+  {
+    id: id(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    /** The mailbox it applies to; null = every mailbox. */
+    accountId: uuid("account_id").references(() => accounts.id, { onDelete: "cascade" }),
+    pattern: text("pattern").notNull(),
+    action: text("action").notNull().default("spam"),
+    createdBy: uuid("created_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("sender_rules_org_idx").on(t.orgId),
+    uniqueIndex("sender_rules_uq").on(t.orgId, sql`coalesce(${t.accountId}::text, '')`, t.pattern),
+  ],
+);
+
+/**
+ * How a person corrected the AI sorter (changed a tag, marked spam / not spam). The latest ones
+ * are shown to the model as examples, and a sender with a correction is tagged the same way
+ * again without asking the AI.
+ */
+export const sorterExamples = pgTable(
+  "sorter_examples",
+  {
+    id: id(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    fromEmail: text("from_email").notNull(),
+    subject: text("subject"),
+    tag: text("tag").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("sorter_examples_uq").on(t.orgId, t.fromEmail)],
+);
+
+/** AI sorter usage per day (instance-wide), for the daily limit and Settings. */
+export const aiUsage = pgTable("ai_usage", {
+  day: text("day").primaryKey(), // YYYY-MM-DD (UTC)
+  messages: integer("messages").notNull().default(0),
+  inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+  outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+  errors: integer("errors").notNull().default(0),
+  lastError: text("last_error"),
+});

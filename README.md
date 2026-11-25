@@ -106,12 +106,26 @@ Or, for clients that only run local servers (`claude_desktop_config.json` style)
 
 ### Tools agents get (filtered by their permissions)
 
-| Read                                                                                                               | Organize                                                                                         | Send                                                                   | Folders                                           |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------- |
-| `list_accounts`, `list_folders`, `list_messages`, `search_messages`, `get_message`, `get_thread`, `get_attachment` | `mark_messages`, `move_messages`, `delete_messages`, `unsubscribe`, `add_mailboxes` (if allowed) | `send_email`, `reply`, `forward`, `create_draft`, `get_pending_action` | `create_folder`, `rename_folder`, `delete_folder` |
+| Read                                                                                                                            | Organize                                                                                                                      | Send                                                                   | Folders                                           |
+| ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
+| `list_accounts`, `list_folders`, `list_messages`, `search_messages`, `get_message`, `get_thread`, `get_attachment`, `list_tags` | `mark_messages`, `move_messages`, `delete_messages`, `mark_spam`, `tag_messages`, `unsubscribe`, `add_mailboxes` (if allowed) | `send_email`, `reply`, `forward`, `create_draft`, `get_pending_action` | `create_folder`, `rename_folder`, `delete_folder` |
 
-Search syntax: free text plus `from:` `to:` `subject:"…"` `in:<folder>` `after:YYYY-MM-DD` `before:` `has:attachment` `is:unread` `is:flagged`.
+Search syntax: free text plus `from:` `to:` `subject:"…"` `in:<folder>` `tag:<tag>` `after:YYYY-MM-DD` `before:` `has:attachment` `is:unread` `is:flagged`.
 Prompts: `triage_inbox`, `summarize_thread`, `draft_reply`.
+
+## Spam and AI sorting
+
+- **Spam / Not spam** in Mail (and the `mark_spam` tool) moves mail to the account's Spam folder,
+  where Gmail, iCloud and many other servers learn from it, and sets the `$Junk` keyword that mail
+  apps use. "Always send mail from this sender to Spam" blocks a sender; manage the list under
+  **Spam & sorting**.
+- Each message shows what your mail server reported about it: whether the sender was verified
+  (SPF, DKIM, DMARC) and any spam score, with a warning on suspicious mail.
+- **AI sorting** (optional, uses your Anthropic API key) tags each new message by what it is:
+  personal, solicitation, marketing, newsletter, social media, notifications, receipts, security,
+  spam. Tags are editable, each can archive, mark read or move to Spam automatically, and your
+  corrections teach it. Filter Mail by tag, search with `tag:social`, or ask Claude to act on a
+  whole kind of mail ("delete all social media emails").
 
 ## Moving to a new mail host
 

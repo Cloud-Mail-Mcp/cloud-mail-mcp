@@ -314,6 +314,8 @@ export interface Connector {
     change: {
       add?: Partial<Omit<MessageFlags, "keywords">>;
       remove?: Partial<Omit<MessageFlags, "keywords">>;
+      /** Custom keywords such as $Junk / $NotJunk (ignored where the server doesn't allow them). */
+      keywords?: { add?: string[]; remove?: string[] };
     },
   ): Promise<void>;
   /** Permanently remove (expunge). Moving to trash is done by core via `move`. */

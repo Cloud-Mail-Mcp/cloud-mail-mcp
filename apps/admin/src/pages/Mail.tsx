@@ -13,6 +13,8 @@ import {
   addr,
   api,
   type MailFolder,
+  type MailTag,
+  type MessageChecks,
   type MessageDetail,
   type MessagePage,
   type MessageSummary,
@@ -159,6 +161,40 @@ function HtmlBody({ html }: { html: string }) {
 
 // ───────────────────────────── Message view ─────────────────────────────
 
+/** What the receiving mail server said about the sender and spam score. */
+function ChecksNote({ c }: { c: MessageChecks }) {
+  const detail = [
+    c.spf && `SPF ${c.spf}`,
+    c.dkim && `DKIM ${c.dkim}`,
+    c.dmarc && `DMARC ${c.dmarc}`,
+    c.spamScore !== null &&
+      `spam score ${c.spamScore}${c.spamThreshold !== null ? ` / ${c.spamThreshold}` : ""}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (c.verdict === "verified")
+    return (
+      <p className="mb-2 text-xs text-green-700 dark:text-green-400" title={detail}>
+        ✓ Sender verified by your mail server
+      </p>
+    );
+  if (c.verdict === "unknown") return null;
+  return (
+    <div className="mb-3">
+      <Alert
+        tone={c.verdict === "spam" ? "error" : "warning"}
+        title={
+          c.verdict === "spam"
+            ? "Your mail server's spam filter flagged this message."
+            : "The sender couldn't be verified: this may not be who it says it's from."
+        }
+      >
+        Be careful with links, attachments and requests for money or passwords. ({detail})
+      </Alert>
+    </div>
+  );
+}
+
 function MessageCard({
   m,
   expanded,
@@ -197,6 +233,7 @@ function MessageCard({
       </button>
       {expanded && (
         <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          {m.checks && <ChecksNote c={m.checks} />}
           {m.html && (
             <div className="mb-2 text-right">
               <button
@@ -301,17 +338,51 @@ function UnsubscribeButton({
   );
 }
 
+type RemoveKind = "trash" | "archive" | "spam" | "notspam";
+
+/** Spam, with the option to send the sender's future mail to Spam too. */
+function SpamMenu({ sender, onSpam }: { sender?: string; onSpam: (block: boolean) => void }) {
+  return (
+    <details className="relative">
+      <summary className="inline-flex cursor-pointer list-none items-center justify-center rounded-md border border-zinc-300 bg-white px-3.5 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">
+        Spam ▾
+      </summary>
+      <div className="absolute right-0 z-10 mt-1 w-64 rounded-md border border-zinc-200 bg-white p-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <button
+          type="button"
+          onClick={() => onSpam(false)}
+          className="block w-full rounded px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+        >
+          Move to Spam
+        </button>
+        {sender && (
+          <button
+            type="button"
+            onClick={() => onSpam(true)}
+            className="block w-full rounded px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Move to Spam, and always send mail from{" "}
+            <span className="break-all font-medium">{sender}</span> there
+          </button>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function Reader({
   id,
   onClose,
   onChanged,
   onRemove,
+  tags,
 }: {
   id: number;
   onClose: () => void;
   onChanged: () => void;
-  /** Delete or archive: the page hides the message and opens the next one right away. */
-  onRemove: (kind: "trash" | "archive") => void;
+  /** Delete, archive or spam: the page hides the message and opens the next one right away. */
+  onRemove: (kind: RemoveKind, opts?: { blockSender?: boolean }) => void;
+  tags: MailTag[];
 }) {
   const qc = useQueryClient();
   const thread = useQuery({
@@ -376,6 +447,17 @@ function Reader({
     },
     onError: (e) => setErr((e as Error).message),
   });
+  const retag = useMutation({
+    mutationFn: (tag: string) =>
+      api("/mail/messages/tags", { method: "POST", body: { ids: [id], tags: tag ? [tag] : [] } }),
+    onMutate: () => setErr(null),
+    onSuccess: async () => {
+      onChanged();
+      await qc.invalidateQueries({ queryKey: ["thread", id] });
+      await qc.invalidateQueries({ queryKey: ["mail-tags"] });
+    },
+    onError: (e) => setErr((e as Error).message),
+  });
   const send = useMutation({
     mutationFn: () => api(`/mail/messages/${id}/reply`, { method: "POST", body: { text: reply } }),
     onSuccess: () => {
@@ -415,6 +497,25 @@ function Reader({
             {current.accountLabel && <> ({current.accountLabel})</>} · {current.folders.join(", ")}
             {msgs.length > 1 && <> · {msgs.length} messages</>}
           </p>
+          {tags.length > 0 && (
+            <label className="mt-1 inline-flex items-center gap-1.5 text-xs text-zinc-500">
+              Kind:
+              <select
+                value={current.tags[0] ?? ""}
+                disabled={retag.isPending}
+                onChange={(e) => retag.mutate(e.target.value)}
+                title="Changing it teaches the AI sorter about this sender"
+                className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              >
+                <option value="">Not tagged</option>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5">
           <Button
@@ -439,6 +540,16 @@ function Reader({
           <Button variant="secondary" onClick={() => onRemove("archive")}>
             Archive
           </Button>
+          {current.folders.some((f) => /^(spam|junk|\[gmail\]\/spam)$/i.test(f)) ? (
+            <Button variant="secondary" onClick={() => onRemove("notspam")}>
+              Not spam
+            </Button>
+          ) : (
+            <SpamMenu
+              sender={current.from?.email}
+              onSpam={(block) => onRemove("spam", { blockSender: block })}
+            />
+          )}
           <Button
             variant="secondary"
             onClick={() => onRemove("trash")}
@@ -513,6 +624,16 @@ export function MailPage() {
     queryKey: ["mail-folders"],
     queryFn: () => api<{ folders: MailFolder[] }>("/mail/folders"),
   });
+  const tagsQ = useQuery({
+    queryKey: ["mail-tags"],
+    queryFn: () => api<{ enabled: boolean; tags: MailTag[] }>("/mail/tags"),
+    staleTime: 30_000,
+  });
+  const tagList = tagsQ.data?.tags ?? [];
+  const tagName = (id: string) => tagList.find((t) => t.id === id)?.name ?? id;
+  // The filter shows once anything is tagged (or the AI sorter is on).
+  const showTags = !!tagsQ.data?.enabled || tagList.some((t) => t.inbox > 0);
+  const [tag, setTag] = useState<string>("");
   const [view, setView] = useState<View>({ folder: "inbox", label: "All inboxes" });
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -559,7 +680,7 @@ export function MailPage() {
     }
   };
 
-  const listKey = ["mail-list", view.accountId ?? "all", view.folder, query, sort, unreadOnly];
+  const listKey = ["mail-list", view.accountId ?? "all", view.folder, query, sort, unreadOnly, tag];
   const list = useInfiniteQuery({
     queryKey: listKey,
     initialPageParam: undefined as string | undefined,
@@ -571,11 +692,12 @@ export function MailPage() {
       p.set("sort", sortField);
       p.set("order", sortOrder);
       if (query) {
-        p.set("q", unreadOnly ? `${query} is:unread` : query);
+        p.set("q", `${query}${unreadOnly ? " is:unread" : ""}${tag ? ` tag:${tag}` : ""}`);
         return api<MessagePage>(`/mail/search?${p}`);
       }
       p.set("folder", view.folder);
       if (unreadOnly) p.set("unread", "true");
+      if (tag) p.set("tag", tag);
       return api<MessagePage>(`/mail/messages?${p}`);
     },
     getNextPageParam: (last) => last.nextCursor,
@@ -591,10 +713,12 @@ export function MailPage() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["mail-list"] });
     qc.invalidateQueries({ queryKey: ["mail-folders"] });
+    qc.invalidateQueries({ queryKey: ["mail-tags"] });
   };
 
   const viewFolder = (foldersQ.data?.folders ?? []).find((f) => String(f.id) === view.folder);
   const inTrash = viewFolder?.role === "trash";
+  const inSpam = viewFolder?.role === "spam";
   const confirmErase = (n: number) =>
     !inTrash ||
     window.confirm(
@@ -617,8 +741,19 @@ export function MailPage() {
     );
   };
 
-  type BulkKind = "read" | "unread" | "flag" | "unflag" | "archive" | "trash" | "move";
+  type BulkKind =
+    | "read"
+    | "unread"
+    | "flag"
+    | "unflag"
+    | "archive"
+    | "trash"
+    | "move"
+    | "spam"
+    | "notspam";
   const LABELS: Record<BulkKind, string> = {
+    spam: "mark as spam",
+    notspam: "mark as not spam",
     read: "mark as read",
     unread: "mark as unread",
     flag: "flag",
@@ -632,10 +767,20 @@ export function MailPage() {
    * Apply an action to messages. Moves (delete/archive/move) hide them at once and, if the open
    * message is among them, open the next one; the server calls run behind (500 per request).
    */
-  const act = async (ids: number[], kind: BulkKind, folder?: string | number) => {
+  const act = async (
+    ids: number[],
+    kind: BulkKind,
+    folder?: string | number,
+    opts: { blockSender?: boolean } = {},
+  ) => {
     if (!ids.length) return;
     if (kind === "trash" && !confirmErase(ids.length)) return;
-    const removes = kind === "archive" || kind === "trash" || kind === "move";
+    const removes =
+      kind === "archive" ||
+      kind === "trash" ||
+      kind === "move" ||
+      kind === "spam" ||
+      kind === "notspam";
     setRemoveErr(null);
     if (removes) {
       const gone = new Set(ids);
@@ -671,6 +816,11 @@ export function MailPage() {
         const chunk = ids.slice(i, i + 500);
         if (kind === "trash")
           await api("/mail/messages/delete", { method: "POST", body: { ids: chunk } });
+        else if (kind === "spam" || kind === "notspam")
+          await api("/mail/messages/spam", {
+            method: "POST",
+            body: { ids: chunk, spam: kind === "spam", blockSender: opts.blockSender },
+          });
         else if (removes)
           await api("/mail/messages/move", {
             method: "POST",
@@ -701,7 +851,8 @@ export function MailPage() {
       if (selected != null) qc.invalidateQueries({ queryKey: ["thread", selected] });
     }
   };
-  const removeMessage = (id: number, kind: "trash" | "archive") => act([id], kind);
+  const removeMessage = (id: number, kind: RemoveKind, opts?: { blockSender?: boolean }) =>
+    act([id], kind, undefined, opts);
   const checkedIds = rows.filter((r) => checked.has(r.id)).map((r) => r.id);
 
   /** Click a checkbox (or Ctrl/⌘-click a row); with Shift, select everything up to the last one. */
@@ -1004,6 +1155,30 @@ export function MailPage() {
                 ? `Results for “${query}”${view.accountId ? ` in ${view.label.split(" · ")[0]}` : ""}`
                 : view.label}
             </p>
+            {showTags && (
+              <select
+                aria-label="Show only one kind of mail"
+                value={tag}
+                onChange={(e) => {
+                  setTag(e.target.value);
+                  setSelected(null);
+                  setChecked(new Set());
+                }}
+                className={`max-w-[9rem] shrink-0 rounded border px-1 py-0.5 text-xs ${
+                  tag
+                    ? "border-blue-600 bg-blue-50 font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                    : "border-zinc-300 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                }`}
+              >
+                <option value="">All kinds</option>
+                {tagList.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.inbox ? ` (${t.inbox})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               type="button"
               onClick={toggleUnread}
@@ -1070,6 +1245,45 @@ export function MailPage() {
                     {label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => void act(checkedIds, inSpam ? "notspam" : "spam")}
+                  className="rounded border border-zinc-300 px-1.5 py-0.5 text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  {inSpam ? "Not spam" : "Spam"}
+                </button>
+                {tagList.length > 0 && (
+                  <select
+                    aria-label="Tag selected messages"
+                    value=""
+                    disabled={bulkBusy}
+                    onChange={async (e) => {
+                      const v = e.target.value;
+                      if (!v) return;
+                      const ids = checkedIds;
+                      patchRows(ids, { tags: v === "-" ? [] : [v] });
+                      try {
+                        await api("/mail/messages/tags", {
+                          method: "POST",
+                          body: { ids, tags: v === "-" ? [] : [v] },
+                        });
+                      } catch (err) {
+                        setRemoveErr(`Couldn't tag those messages: ${(err as Error).message}`);
+                      }
+                      refresh();
+                    }}
+                    className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  >
+                    <option value="">Tag as…</option>
+                    {tagList.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                    <option value="-">No tag</option>
+                  </select>
+                )}
                 {moveTargets.length > 0 && (
                   <select
                     aria-label="Move selected to folder"
@@ -1127,9 +1341,11 @@ export function MailPage() {
             <p className="p-6 text-center text-sm text-zinc-500">
               {query
                 ? "No matches."
-                : unreadOnly
-                  ? "No unread messages here."
-                  : "No messages here yet. New accounts fill in as they sync."}
+                : tag
+                  ? `Nothing tagged ${tagName(tag)} here.`
+                  : unreadOnly
+                    ? "No unread messages here."
+                    : "No messages here yet. New accounts fill in as they sync."}
             </p>
           ) : (
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -1182,9 +1398,22 @@ export function MailPage() {
                         {(sortField === "from" ? m.from?.email : addr(m.from)) ||
                           "(unknown sender)"}
                       </span>
-                      <time className="shrink-0 text-xs text-zinc-500" dateTime={m.date}>
-                        {shortDate(m.date)}
-                      </time>
+                      <span className="flex shrink-0 items-baseline gap-1.5">
+                        {m.tags[0] && (
+                          <span
+                            className={`rounded px-1.5 py-px text-[10px] font-medium ${
+                              m.tags[0] === "spam"
+                                ? "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                            }`}
+                          >
+                            {tagName(m.tags[0])}
+                          </span>
+                        )}
+                        <time className="text-xs text-zinc-500" dateTime={m.date}>
+                          {shortDate(m.date)}
+                        </time>
+                      </span>
                     </div>
                     <p
                       className={`truncate text-sm ${m.unread ? "font-medium text-zinc-900 dark:text-zinc-100" : "text-zinc-600 dark:text-zinc-400"}`}
@@ -1238,7 +1467,8 @@ export function MailPage() {
             id={selected}
             onClose={() => setSelected(null)}
             onChanged={refresh}
-            onRemove={(kind) => void removeMessage(selected, kind)}
+            onRemove={(kind, opts) => void removeMessage(selected, kind, opts)}
+            tags={tagList}
           />
         ) : (
           <div className="mt-20 text-center text-sm text-zinc-500">

@@ -17,6 +17,7 @@ import { MailPage } from "./pages/Mail";
 import { MigrationsPage } from "./pages/Migrations";
 import { SettingsPage } from "./pages/Settings";
 import { SetupWizard } from "./pages/Setup";
+import { SortingPage } from "./pages/Sorting";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +65,7 @@ function App() {
         <Route path="/agents/:id">{(p) => <AgentDetailPage key={p.id} id={p.id} />}</Route>
         <Route path="/permissions" component={PermissionsPage} />
         <Route path="/approvals" component={ApprovalsPage} />
+        <Route path="/sorting" component={SortingPage} />
         <Route path="/audit" component={AuditPage} />
         <Route path="/migrations" component={MigrationsPage} />
         <Route>

@@ -31,7 +31,8 @@ export interface AccountGrant {
 /** Everything an actor (admin user or agent) may do, resolved once per request. */
 export interface Access {
   orgId: string;
-  actor: { type: "user" | "agent"; id: string; name: string };
+  /** "system": MailMCP itself (the AI sorter acting on its own). */
+  actor: { type: "user" | "agent" | "system"; id: string; name: string };
   grants: Map<string, AccountGrant>;
   /** May add mailboxes (people always; agents when allowed on their page). */
   canAddAccounts?: boolean;

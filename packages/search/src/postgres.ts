@@ -108,6 +108,7 @@ export class PostgresSearchIndex implements SearchIndex {
     if (q.isUnread === true) conds.push(sql`NOT m.seen`);
     if (q.isUnread === false) conds.push(sql`m.seen`);
     if (q.isFlagged) conds.push(sql`m.flagged`);
+    if (q.tags.length) conds.push(sql`m.tags @> ${pgArray(q.tags, "text")}`);
 
     // Folder filters: the agent's allowed folders (scope) and any `in:` operator.
     const folderConds: SQL[] = [];

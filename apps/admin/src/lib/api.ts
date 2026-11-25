@@ -143,6 +143,28 @@ export interface MessageSummary {
   flagged: boolean;
   answered: boolean;
   hasAttachments: boolean;
+  /** What the message is (AI sorter or a person), e.g. ["newsletter"]. */
+  tags: string[];
+}
+
+/** Sender checks and spam score reported by the receiving mail server. */
+export interface MessageChecks {
+  spf: string | null;
+  dkim: string | null;
+  dmarc: string | null;
+  spamScore: number | null;
+  spamThreshold: number | null;
+  spamFlag: boolean;
+  verdict: "verified" | "suspicious" | "spam" | "unknown";
+}
+
+/** A tag from Settings → AI sorting, with inbox counts. */
+export interface MailTag {
+  id: string;
+  name: string;
+  action: "none" | "mark_read" | "archive" | "spam";
+  inbox: number;
+  unread: number;
 }
 
 export interface MessageDetail extends MessageSummary {
@@ -158,6 +180,7 @@ export interface MessageDetail extends MessageSummary {
     website: string | null;
     unsubscribedAt: string | null;
   } | null;
+  checks: MessageChecks | null;
   attachments: Array<{
     id: number;
     filename: string | null;

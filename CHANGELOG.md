@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **Add many mailboxes at once** from an Excel or CSV file, or let an AI agent add them for you
   to finish with the passwords.
 - **Unsubscribe** from newsletters in one click, for you and your agents.
+- **Spam and AI sorting**: Spam / Not spam with blocked senders, sender checks on every message,
+  and optional AI tagging of new mail by kind (social, solicitation, newsletter…) that learns from
+  your corrections.
 - **Faster mail view**: select many messages at once, keyboard shortcuts, an unread filter, and
   folding account lists.
 - **Install on shared hosting**: Enhance, cPanel, Easypanel, Coolify, CapRover and Dokploy.
@@ -75,6 +78,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - AI agents can unsubscribe too, with the new **Unsubscribe** permission (`unsubscribe` tool).
   It's included in the Assistant presets. Unsubscribing by email counts as sending, so it
   follows the agent's send policy and can wait for your approval.
+
+### Spam and AI sorting
+
+- **Spam** and **Not spam** buttons in Mail (one message or a selection), and a `mark_spam` tool
+  for agents. Spam moves mail to the account's Spam folder (Gmail, iCloud and many servers learn
+  from that) and sets the `$Junk` keyword mail apps use. Choose **Move to Spam, and always send
+  mail from …** to block a sender; Not spam unblocks them. Manage blocked addresses and whole
+  domains on the new **Spam & sorting** page.
+- Messages show what your mail server said about them: a "Sender verified" note, or a warning when
+  the sender couldn't be verified (SPF, DKIM or DMARC failed) or the spam filter flagged it.
+- **AI sorting** (optional; uses your Anthropic API key, Claude Haiku 5.5 by default): every new
+  inbox message is tagged by what it is: personal, solicitation, marketing, newsletter, social
+  media, notifications, receipts & bills, security or spam. Tags and their descriptions are
+  editable, and each tag can leave mail in the inbox, mark it read, archive it, or move it to
+  Spam. A daily limit caps the cost, and **Sort older mail** tags the last 7, 30 or 90 days.
+- It learns from you: change a message's **Kind** (or mark it spam) and that sender's next
+  messages get the same tag without asking the AI; recent corrections are shown to Claude as
+  examples.
+- Filter Mail by kind, tag a selection by hand, or search with `tag:social`. Agents get
+  `list_tags` and `tag_messages`, and can act on a whole kind of mail: ask Chat to "delete all
+  social media emails" or "reply 'not interested' to every solicitation" (replies follow the
+  agent's send policy).
+- Tags stay with a message when it's moved to another folder.
 
 ### Moving to a new mail host
 
