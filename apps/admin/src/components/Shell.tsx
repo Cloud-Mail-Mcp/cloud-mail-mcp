@@ -32,7 +32,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
           <div className="flex size-7 items-center justify-center rounded-md bg-blue-600 text-sm font-bold text-white">
             M
           </div>
-          <span className="font-semibold text-zinc-900 dark:text-zinc-50">MailMCP</span>
+          <span className="font-semibold text-zinc-900 dark:text-zinc-50">Cloud Mail MCP</span>
         </div>
         <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Main">
           {nav.map((n) => {

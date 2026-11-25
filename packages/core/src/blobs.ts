@@ -1,4 +1,4 @@
-import { type BlobStore, blobStoreFromConfig, EncryptedBlobStore } from "@mailmcp/storage";
+import { type BlobStore, blobStoreFromConfig, EncryptedBlobStore } from "@cloud-mail-mcp/storage";
 import type { SettingsService } from "./settings";
 
 /**

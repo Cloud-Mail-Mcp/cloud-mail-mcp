@@ -396,9 +396,9 @@ function LearnedCard() {
     <Card title={`What the sorter has learned${list.length ? ` · ${list.length}` : ""}`}>
       <div className="space-y-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          When you change a message's tag or mark it as spam, MailMCP remembers it for that sender:
-          their next messages get the same tag without asking the AI, and the latest corrections are
-          shown to Claude as examples for similar mail.
+          When you change a message's tag or mark it as spam, Cloud Mail MCP remembers it for that
+          sender: their next messages get the same tag without asking the AI, and the latest
+          corrections are shown to Claude as examples for similar mail.
         </p>
         {list.length === 0 ? (
           <p className="text-sm text-zinc-500">
@@ -430,8 +430,8 @@ function TipsCard() {
     <Card title="Ask Claude to act on a kind of mail">
       <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
         <p>
-          In <b>Chat</b> (or any AI app connected to MailMCP), Claude can find mail by tag and act
-          on all of it. For example:
+          In <b>Chat</b> (or any AI app connected to Cloud Mail MCP), Claude can find mail by tag
+          and act on all of it. For example:
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>“Delete all social media emails in my inbox.”</li>

@@ -1,4 +1,15 @@
-import { accounts, agents, and, auditLog, desc, eq, ilike, lt, type SQL, users } from "@mailmcp/db";
+import {
+  accounts,
+  agents,
+  and,
+  auditLog,
+  desc,
+  eq,
+  ilike,
+  lt,
+  type SQL,
+  users,
+} from "@cloud-mail-mcp/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";

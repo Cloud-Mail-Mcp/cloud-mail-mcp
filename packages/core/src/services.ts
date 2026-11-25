@@ -1,6 +1,6 @@
-import type { Db } from "@mailmcp/db";
-import type { ModuleManifest } from "@mailmcp/module-sdk";
-import { PostgresSearchIndex, type SearchIndex } from "@mailmcp/search";
+import type { Db } from "@cloud-mail-mcp/db";
+import type { ModuleManifest } from "@cloud-mail-mcp/module-sdk";
+import { PostgresSearchIndex, type SearchIndex } from "@cloud-mail-mcp/search";
 import { AccountService } from "./accounts";
 import { AgentService } from "./agents";
 import { BlobService } from "./blobs";

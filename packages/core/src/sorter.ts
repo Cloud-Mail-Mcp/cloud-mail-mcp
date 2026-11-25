@@ -12,8 +12,8 @@ import {
   senderRules,
   sorterExamples,
   sql,
-} from "@mailmcp/db";
-import type { Logger } from "@mailmcp/module-sdk";
+} from "@cloud-mail-mcp/db";
+import type { Logger } from "@cloud-mail-mcp/module-sdk";
 import { z } from "zod";
 import type { AccountRow, AccountService } from "./accounts";
 import type { MessageChecks } from "./checks";

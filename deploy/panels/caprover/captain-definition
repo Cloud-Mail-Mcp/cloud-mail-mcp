@@ -1,4 +1,4 @@
 {
   "schemaVersion": 2,
-  "imageName": "ghcr.io/cloud-mail-mcp/mailmcp:latest"
+  "imageName": "ghcr.io/cloud-mail-mcp/cloud-mail-mcp:latest"
 }

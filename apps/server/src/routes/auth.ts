@@ -1,5 +1,5 @@
-import { audit } from "@mailmcp/core";
-import { count, memberships, orgs, sql, users } from "@mailmcp/db";
+import { audit } from "@cloud-mail-mcp/core";
+import { count, memberships, orgs, sql, users } from "@cloud-mail-mcp/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";
@@ -8,15 +8,17 @@ import {
   createSession,
   destroySession,
   hashPassword,
+  OLD_SESSION_COOKIE,
   requireRole,
   requireUser,
   SESSION_COOKIE,
+  sessionToken,
   userFromSession,
   verifyPassword,
 } from "../auth";
 
 const SetupBody = z.object({
-  orgName: z.string().trim().min(1).max(100).default("My MailMCP"),
+  orgName: z.string().trim().min(1).max(100).default("My Cloud Mail MCP"),
   name: z.string().trim().max(100).optional(),
   email: z.email(),
   password: z.string().min(10, "Use at least 10 characters"),
@@ -129,9 +131,10 @@ export async function authRoutes(app: FastifyInstance, { db, config, settings }:
   });
 
   app.post("/api/v1/auth/logout", async (req, reply) => {
-    const token = req.cookies[SESSION_COOKIE];
+    const token = sessionToken(req.cookies);
     if (token) await destroySession(db, token);
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
+    reply.clearCookie(OLD_SESSION_COOKIE, { path: "/" });
     return { ok: true };
   });
 

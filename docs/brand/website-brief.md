@@ -1,8 +1,8 @@
-# MailMCP — Brand & Website Brief
+# Cloud Mail MCP — Brand & Website Brief
 
 **For:** Claude Design (brand identity + marketing website)
-**Project:** MailMCP, an open-source, self-hosted email server for AI agents
-**Repository:** https://github.com/Cloud-Mail-Mcp/mailmcp
+**Project:** Cloud Mail MCP, an open-source, self-hosted email server for AI agents
+**Repository:** https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp
 **Status:** v0.1, early but working end to end. Free and open source (AGPL-3.0).
 
 ---
@@ -20,24 +20,24 @@ Static HTML/CSS (or a single React page) is fine. No backend is required.
 
 ## 2. The product in one breath
 
-> **MailMCP connects all your mailboxes, keeps a fast, encrypted local index of your mail, and lets AI agents like Claude read, search, organize and send email with exactly the permissions you give them. You run it on your own server.**
+> **Cloud Mail MCP connects all your mailboxes, keeps a fast, encrypted local index of your mail, and lets AI agents like Claude read, search, organize and send email with exactly the permissions you give them. You run it on your own server.**
 
 **How it works:**
 
 1. **Connect mailboxes.** Any IMAP/SMTP account: cPanel and other hosting mail, Apple iCloud, Gmail (app password). Microsoft 365 and the native Gmail API are next on the roadmap.
-2. **MailMCP indexes them.** Headers first and newest first, so a 100,000-message mailbox is searchable in about 3 minutes. Full message bodies download in the background. Everything is stored encrypted.
+2. **Cloud Mail MCP indexes them.** Headers first and newest first, so a 100,000-message mailbox is searchable in about 3 minutes. Full message bodies download in the background. Everything is stored encrypted.
 3. **Give AI agents access.** Each agent (Claude Desktop, Claude Code, or your own app) gets its own key and its own permissions per mailbox: read only, organize, draft, or send. Sends can wait for your approval, and every action is recorded in an audit log.
 
 **Who it's for:**
 
 - **Primary: people with too much email.** Business owners, agency operators and power users juggling 5 to 20+ mailboxes who want an AI assistant to help with their inbox without handing a third party their mail. Typical frustration: "No tool can handle my email volume."
-- **Secondary: developers** adding email to their own AI agents or products. They plug MailMCP into their stack over MCP, a REST API, or the TypeScript SDK.
+- **Secondary: developers** adding email to their own AI agents or products. They plug Cloud Mail MCP into their stack over MCP, a REST API, or the TypeScript SDK.
 - **Tertiary: self-hosters and privacy-minded teams** who want the data on their own hardware.
 
 **Proof points (measured, safe to quote):**
 
 - Indexes about **600 messages per second**; a 100k-message mailbox is searchable in roughly **3 minutes**.
-- New mail arrives in seconds via IMAP IDLE (the server notifies MailMCP when mail lands).
+- New mail arrives in seconds via IMAP IDLE (the server notifies Cloud Mail MCP when mail lands).
 - Mail and saved passwords are **encrypted (AES-256-GCM)** with a key that's never stored in the database.
 - **Per-agent, per-mailbox permissions:** read, organize, draft, send, delete, and permanent delete are separate, plus folder allow/deny lists, recipient allow-lists, and rate limits.
 - **Human approval for outgoing mail**, and an **audit log of every action**, including blocked attempts.
@@ -51,7 +51,7 @@ Static HTML/CSS (or a single React page) is fine. No backend is required.
 
 **Personality:** trustworthy, calm, competent, privacy-first, friendly to non-experts but credible to engineers. Closer to _a well-made tool you own_ than _a startup selling AI_.
 
-**Name:** **MailMCP** (one word, capital M-M-C-P). "MCP" is the Model Context Protocol, the open standard AI apps use to connect to tools. The GitHub organization is "Cloud-Mail-Mcp"; the product name is MailMCP.
+**Name:** **Cloud Mail MCP** (one word, capital M-M-C-P). "MCP" is the Model Context Protocol, the open standard AI apps use to connect to tools. The GitHub organization is "Cloud-Mail-Mcp"; the product name is Cloud Mail MCP.
 
 **Logo ideas to explore** (your call):
 
@@ -78,10 +78,10 @@ Static HTML/CSS (or a single React page) is fine. No backend is required.
 - "Give Claude your inbox, with permissions you control."
 - "Self-hosted email for AI agents."
 
-**Subheadline:** "MailMCP connects all your mailboxes, indexes them fast, and lets AI agents read, search, organize and send email with exactly the access you allow. Open source. Runs on your own server."
+**Subheadline:** "Cloud Mail MCP connects all your mailboxes, indexes them fast, and lets AI agents read, search, organize and send email with exactly the access you allow. Open source. Runs on your own server."
 
 **Primary CTA:** "Install on your server" (scrolls to the install section).
-**Secondary CTA:** "View on GitHub" → https://github.com/Cloud-Mail-Mcp/mailmcp
+**Secondary CTA:** "View on GitHub" → https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp
 
 ---
 
@@ -95,7 +95,7 @@ Single page; the nav anchors are the section names.
    - "Too many mailboxes, too much mail": tools stall on volume.
    - "AI with full inbox access is scary": all-or-nothing access to your email.
    - "Your mail on someone else's servers": hosted tools copy your data.
-4. **How it works (3 steps with icons):** Connect mailboxes → MailMCP indexes them → Agents work within your rules. Use the step text from §2.
+4. **How it works (3 steps with icons):** Connect mailboxes → Cloud Mail MCP indexes them → Agents work within your rules. Use the step text from §2.
 5. **Features grid (6 to 8 items):**
    - **Every mailbox in one place:** IMAP/SMTP today: cPanel, iCloud, Gmail. Microsoft 365 and the Gmail API next.
    - **Fast local search:** search across all accounts with `from:`, `subject:`, `has:attachment`, `is:unread`; sort by date, sender or subject.
@@ -111,21 +111,21 @@ Single page; the nav anchors are the section names.
    - Agents see only what they're granted; default is no access.
    - Email content is marked to agents as untrusted (a defense against prompt injection).
    - Remote images are blocked in the viewer to prevent tracking.
-   - The only outbound call MailMCP makes on its own is an optional update check to GitHub.
+   - The only outbound call Cloud Mail MCP makes on its own is an optional update check to GitHub.
 7. **For developers:** an MCP tool list (`list_accounts`, `search_messages`, `get_message`, `get_thread`, `send_email`, `reply`, `forward`, `move_messages`, `delete_messages`, …), Streamable HTTP endpoint, REST API, TypeScript. A small code block:
 
    ```
-   claude mcp add --transport http mailmcp https://mail.example.com/mcp \
-     --header "Authorization: Bearer mmcp_…"
+   claude mcp add --transport http cloud-mail-mcp https://mail.example.com/mcp \
+     --header "Authorization: Bearer cmcp_…"
    ```
 8. **Install:** requirements ("a server with Docker"), then a copyable command block:
 
    ```
-   curl -fsSL https://github.com/Cloud-Mail-Mcp/mailmcp/releases/latest/download/install.sh | sh -s -- --domain mail.example.com
+   curl -fsSL https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/latest/download/install.sh | sh -s -- --domain mail.example.com
    ```
 
-   Then "Open your domain and follow the setup wizard", plus a screenshot of the wizard (`screenshots/setup-wizard.png`). Link: "Full install guide" → https://github.com/Cloud-Mail-Mcp/mailmcp#install-on-your-server
-9. **Roadmap:** Microsoft 365 (OAuth), Gmail API, OAuth sign-in for agents, larger-scale search (OpenSearch), more connector modules. Link: https://github.com/Cloud-Mail-Mcp/mailmcp/blob/main/docs/SPEC.md
+   Then "Open your domain and follow the setup wizard", plus a screenshot of the wizard (`screenshots/setup-wizard.png`). Link: "Full install guide" → https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp#install-on-your-server
+9. **Roadmap:** Microsoft 365 (OAuth), Gmail API, OAuth sign-in for agents, larger-scale search (OpenSearch), more connector modules. Link: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/blob/main/docs/SPEC.md
 10. **Open source & donate:** see §6.
 11. **FAQ:**
     - _Is it free?_ Yes. Open source under AGPL-3.0, free to self-host.
@@ -134,18 +134,18 @@ Single page; the nav anchors are the section names.
     - _Can the AI send email without me?_ Only if you allow it. You can require approval for every send, or block sending entirely.
     - _What do I need?_ A server or computer with Docker. A domain is recommended for HTTPS.
     - _Is there a hosted version?_ Not yet. Self-hosting is the way today.
-12. **Footer:** GitHub, Releases, Report an issue, License (AGPL-3.0), Donate. "© MailMCP contributors."
+12. **Footer:** GitHub, Releases, Report an issue, License (AGPL-3.0), Donate. "© Cloud Mail MCP contributors."
 
 **Links (use exactly):**
 
-| Label               | URL                                                              |
-| ------------------- | ---------------------------------------------------------------- |
-| GitHub repository   | https://github.com/Cloud-Mail-Mcp/mailmcp                        |
-| Releases / download | https://github.com/Cloud-Mail-Mcp/mailmcp/releases               |
-| Install guide       | https://github.com/Cloud-Mail-Mcp/mailmcp#install-on-your-server |
-| Report an issue     | https://github.com/Cloud-Mail-Mcp/mailmcp/issues                 |
-| Roadmap / spec      | https://github.com/Cloud-Mail-Mcp/mailmcp/blob/main/docs/SPEC.md |
-| License             | https://github.com/Cloud-Mail-Mcp/mailmcp/blob/main/LICENSE      |
+| Label               | URL                                                                     |
+| ------------------- | ----------------------------------------------------------------------- |
+| GitHub repository   | https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp                        |
+| Releases / download | https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases               |
+| Install guide       | https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp#install-on-your-server |
+| Report an issue     | https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/issues                 |
+| Roadmap / spec      | https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/blob/main/docs/SPEC.md |
+| License             | https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/blob/main/LICENSE      |
 
 ---
 
@@ -162,7 +162,7 @@ Optionally, if you'd rather embed Stripe's own button, use Stripe's Buy Button s
 
 **Design:**
 
-- Heading: "Support MailMCP." Short copy: "MailMCP is free and open source. Donations fund development: new mail providers, security reviews, and hosting for the project."
+- Heading: "Support Cloud Mail MCP." Short copy: "Cloud Mail MCP is free and open source. Donations fund development: new mail providers, security reviews, and hosting for the project."
 - A **One-time / Monthly** toggle, and suggested amounts as visual chips ($5, $10, $25, $50, Custom). All chips lead to the matching Payment Link; the donor confirms the amount on Stripe.
 - A primary button: "Donate with Stripe" (or "Become a monthly sponsor").
 - Small trust line: "Secure checkout by Stripe. We never see your card details."

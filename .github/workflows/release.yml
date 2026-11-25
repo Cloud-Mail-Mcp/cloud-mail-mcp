@@ -1,4 +1,4 @@
-# Builds and publishes MailMCP for every install method AT ONCE, for whichever repository runs
+# Builds and publishes Cloud Mail MCP for every install method AT ONCE, for whichever repository runs
 # this workflow — the original project or anyone's fork.
 #
 #   push tag v1.2.3  (stable)            push to main  (edge)
@@ -6,7 +6,7 @@
 #   image  ghcr.io/<repo>:1.2.3, :1.2,   image  ghcr.io/<repo>:edge
 #          :latest                        branch dist-edge  (Node bundle)
 #   branch dist  (Node bundle, for Enhance / git-deploy hosts)
-#   GitHub release with install.sh, compose.yml, mailmcp-node-1.2.3.zip
+#   GitHub release with install.sh, compose.yml, cloud-mail-mcp-node-1.2.3.zip
 #
 # Nothing users follow changes until EVERYTHING has built and passed its checks:
 #   1. build:   image pushed only under an internal sha-<commit> tag; bundle built + smoke-tested
@@ -16,7 +16,7 @@
 # Cut a release with:  pnpm release 1.2.3   (bumps versions, runs checks, tags, pushes)
 #
 # After the very first publish, make the package public once:
-#   GitHub → your org/profile → Packages → mailmcp → Package settings → Change visibility → Public
+#   GitHub → your org/profile → Packages → cloud-mail-mcp → Package settings → Change visibility → Public
 name: Release
 
 on:
@@ -78,9 +78,9 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
           build-args: |
-            MAILMCP_VERSION=${{ needs.prepare.outputs.version }}
-            MAILMCP_REVISION=${{ github.sha }}
-            MAILMCP_REPO=${{ github.repository }}
+            CLOUD_MAIL_MCP_VERSION=${{ needs.prepare.outputs.version }}
+            CLOUD_MAIL_MCP_REVISION=${{ github.sha }}
+            CLOUD_MAIL_MCP_REPO=${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -96,11 +96,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Build the Node.js bundle
-        run: pnpm --filter @mailmcp/admin build && node scripts/build-bundle.mjs
+        run: pnpm --filter @cloud-mail-mcp/admin build && node scripts/build-bundle.mjs
         env:
-          MAILMCP_VERSION: ${{ needs.prepare.outputs.version }}
-          MAILMCP_REVISION: ${{ github.sha }}
-          MAILMCP_REPO: ${{ github.repository }}
+          CLOUD_MAIL_MCP_VERSION: ${{ needs.prepare.outputs.version }}
+          CLOUD_MAIL_MCP_REVISION: ${{ github.sha }}
+          CLOUD_MAIL_MCP_REPO: ${{ github.repository }}
       - name: Smoke test (starts and serves the database installer)
         run: |
           cd dist/bundle
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: node-bundle
-          path: dist/mailmcp-node-*.zip
+          path: dist/cloud-mail-mcp-node-*.zip
 
   # Runs only if the image AND the bundle both built: every install method updates together.
   publish:
@@ -133,7 +133,7 @@ jobs:
           sed "s|__REPO__|${GITHUB_REPOSITORY}|" deploy/install.sh > dist/install.sh
           cp deploy/compose.yml dist/compose.yml
           grep -q "$GITHUB_REPOSITORY" dist/install.sh
-          (cd dist && unzip -q mailmcp-node-*.zip)
+          (cd dist && unzip -q cloud-mail-mcp-node-*.zip)
 
       - name: 1/4 Draft the GitHub release (stable only; not visible to update checks yet)
         if: env.STABLE == 'true'
@@ -142,8 +142,8 @@ jobs:
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on && /^\[[^]]+\]: / {exit} on {print}' \
             CHANGELOG.md > dist/notes.md
           if grep -q '[^[:space:]]' dist/notes.md; then NOTES=(--notes-file dist/notes.md); else NOTES=(--generate-notes); fi
-          gh release create "$GITHUB_REF_NAME" dist/install.sh dist/compose.yml dist/mailmcp-node-*.zip \
-            --draft --title "MailMCP $GITHUB_REF_NAME" "${NOTES[@]}" --verify-tag
+          gh release create "$GITHUB_REF_NAME" dist/install.sh dist/compose.yml dist/cloud-mail-mcp-node-*.zip \
+            --draft --title "Cloud Mail MCP $GITHUB_REF_NAME" "${NOTES[@]}" --verify-tag
 
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -159,15 +159,27 @@ jobs:
           else
             docker buildx imagetools create -t "$IMAGE:edge" "$IMAGE:$BUILD_TAG"
           fi
+          # Installs from before the rename pull ghcr.io/cloud-mail-mcp/mailmcp: keep it updated too.
+          # Best effort, so a missing permission on the old package never blocks a release.
+          if [[ "$IMAGE" == "ghcr.io/cloud-mail-mcp/cloud-mail-mcp" ]]; then
+            OLD="ghcr.io/cloud-mail-mcp/mailmcp"
+            if [[ "$STABLE" == "true" ]]; then
+              docker buildx imagetools create -t "$OLD:$VERSION" -t "$OLD:${VERSION%.*}" -t "$OLD:latest" "$IMAGE:$BUILD_TAG" \
+                || echo "::warning::Couldn't update the old image name ($OLD)"
+            else
+              docker buildx imagetools create -t "$OLD:edge" "$IMAGE:$BUILD_TAG" \
+                || echo "::warning::Couldn't update the old image name ($OLD)"
+            fi
+          fi
 
       - name: 3/4 Push the ready-to-run bundle branch (Enhance and other git-deploy hosts)
         run: |
           BRANCH=$([[ "$STABLE" == "true" ]] && echo dist || echo dist-edge)
-          cd dist/mailmcp
+          cd dist/cloud-mail-mcp
           git init -q -b "$BRANCH"
           git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -q -m "MailMCP $VERSION (built from $GITHUB_SHA)"
+            commit -q -m "Cloud Mail MCP $VERSION (built from $GITHUB_SHA)"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
 
       - name: 4/4 Publish the release (installs now see the update)
@@ -177,7 +189,7 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "### MailMCP $VERSION published"
+            echo "### Cloud Mail MCP $VERSION published"
             echo "- Docker image: \`$IMAGE:$([[ "$STABLE" == "true" ]] && echo "$VERSION\` (+ \`latest\`)" || echo 'edge`')"
             echo "- Bundle branch: \`$([[ "$STABLE" == "true" ]] && echo dist || echo dist-edge)\`"
             [[ "$STABLE" == "true" ]] && echo "- Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"

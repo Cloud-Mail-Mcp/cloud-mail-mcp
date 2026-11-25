@@ -261,7 +261,7 @@ export function ImportPage() {
         <Card title="1. Choose the file">
           <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
             <p>
-              One mailbox per row, with a header row. MailMCP recognises columns such as{" "}
+              One mailbox per row, with a header row. Cloud Mail MCP recognises columns such as{" "}
               <strong>Email</strong>, <strong>Password</strong>, <strong>Name</strong>,{" "}
               <strong>Label</strong>, <strong>Username</strong>, <strong>IMAP server</strong>,{" "}
               <strong>IMAP port</strong>, <strong>SMTP server</strong> and{" "}
@@ -270,8 +270,8 @@ export function ImportPage() {
               a password wait for you to enter it.
             </p>
             <p>
-              The file is read in your browser. Passwords go straight to your MailMCP server, are
-              tested, and are stored encrypted, so there's no need to share them with an AI.
+              The file is read in your browser. Passwords go straight to your Cloud Mail MCP server,
+              are tested, and are stored encrypted, so there's no need to share them with an AI.
             </p>
             <label className="inline-flex cursor-pointer items-center gap-3">
               <span className="rounded-md border border-zinc-300 bg-white px-3.5 py-2 font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">

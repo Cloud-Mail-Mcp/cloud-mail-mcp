@@ -7,8 +7,8 @@ import {
   loadSavedConfig,
   runtime,
   startWorker,
-} from "@mailmcp/core";
-import { createDb, runMigrations } from "@mailmcp/db";
+} from "@cloud-mail-mcp/core";
+import { createDb, runMigrations } from "@cloud-mail-mcp/db";
 import { buildApp } from "./app";
 import { config } from "./config";
 import { runInstaller } from "./installer";
@@ -22,7 +22,7 @@ if (!loadSavedConfig()) {
 }
 
 // 2. Schema is always brought up to date on start (idempotent).
-if (process.env.MAILMCP_AUTO_MIGRATE !== "false") {
+if (process.env.CLOUD_MAIL_MCP_AUTO_MIGRATE !== "false") {
   await runMigrations(config.databaseUrl, runtime.migrationsDir);
 }
 
@@ -31,7 +31,8 @@ const { db, close } = createDb(config.databaseUrl);
 const { app, deps } = await buildApp({ db, config, masterKey: key, masterKeyInfo });
 
 // 3. Single-process hosting (bundle, or Docker's default) runs the sync worker in this process.
-const embedded = process.env.MAILMCP_EMBEDDED_WORKER === "true" || runtime.install === "bundle";
+const embedded =
+  process.env.CLOUD_MAIL_MCP_EMBEDDED_WORKER === "true" || runtime.install === "bundle";
 const stopWorker = embedded ? await startWorker(deps, { embedded: true }) : null;
 
 await app.listen({ host: config.host, port: config.port });
@@ -51,7 +52,7 @@ process.on("SIGTERM", () => shutdown());
 // 4. Git-deployed bundles (e.g. Enhance "GitHub deploy"): when a new deploy replaces the
 //    `deploys/current` link, exit so the panel's process manager starts the new version.
 if (runtime.install === "bundle") {
-  const link = process.env.MAILMCP_DEPLOY_LINK ?? join(homedir(), "deploys", "current");
+  const link = process.env.CLOUD_MAIL_MCP_DEPLOY_LINK ?? join(homedir(), "deploys", "current");
   const real = (p: string) => {
     try {
       return realpathSync(p);

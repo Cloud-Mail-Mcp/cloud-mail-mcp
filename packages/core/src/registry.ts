@@ -1,4 +1,4 @@
-import type { ModuleManifest } from "@mailmcp/module-sdk";
+import type { ModuleManifest } from "@cloud-mail-mcp/module-sdk";
 import { z } from "zod";
 
 export interface ModuleDescription {

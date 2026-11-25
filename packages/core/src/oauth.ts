@@ -10,7 +10,7 @@ import {
   oauthCodes,
   oauthTokens,
   or,
-} from "@mailmcp/db";
+} from "@cloud-mail-mcp/db";
 import type { AgentService } from "./agents";
 import { audit } from "./audit";
 import { publicHost } from "./net";
@@ -18,7 +18,7 @@ import type { Access, PolicyService } from "./policy";
 import type { Scope } from "./scopes";
 
 /**
- * MailMCP's built-in OAuth 2.1 authorization server for MCP clients (Claude, ChatGPT, Claude Code,
+ * Cloud Mail MCP's built-in OAuth 2.1 authorization server for MCP clients (Claude, ChatGPT, Claude Code,
  * Cursor, VS Code…). Implements the MCP authorization spec: PKCE (S256), RFC 8707 resource
  * binding, Client ID Metadata Documents and Dynamic Client Registration (RFC 7591), and rotating
  * refresh tokens. An approved app becomes an agent with per-mailbox grants, like an API key.
@@ -42,8 +42,10 @@ const CODE_TTL_MS = 10 * 60_000;
 const REQUEST_TTL_MS = 15 * 60_000;
 const CIMD_TTL_MS = 24 * 60 * 60_000;
 
-export const ACCESS_PREFIX = "mmcp_at_";
-export const REFRESH_PREFIX = "mmcp_rt_";
+export const ACCESS_PREFIX = "cmcp_at_";
+export const REFRESH_PREFIX = "cmcp_rt_";
+/** Tokens issued before the rename start with mmcp_at_; they stay valid until they expire. */
+export const isAccessToken = (t: string) => t.startsWith(ACCESS_PREFIX) || t.startsWith("mmcp_at_");
 export const OAUTH_SCOPE = "mail";
 
 /** What the user can pick per mailbox on the approval screen. */
@@ -210,8 +212,8 @@ export class OAuthService {
     const method = ["client_secret_basic", "client_secret_post"].includes(requested)
       ? requested
       : "none";
-    const clientId = `mmcp_client_${randomBytes(16).toString("base64url")}`;
-    const secret = method === "none" ? undefined : token("mmcp_cs_");
+    const clientId = `cmcp_client_${randomBytes(16).toString("base64url")}`;
+    const secret = method === "none" ? undefined : token("cmcp_cs_");
     const clientName = typeof body.client_name === "string" ? body.client_name.slice(0, 100) : null;
     await this.db.insert(oauthClients).values({
       clientId,
@@ -413,7 +415,7 @@ export class OAuthService {
       });
     }
 
-    const code = token("mmcp_code_");
+    const code = token("cmcp_code_");
     await this.db.insert(oauthCodes).values({
       codeHash: sha256(code),
       clientId: r.clientId,

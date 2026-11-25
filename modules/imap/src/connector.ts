@@ -15,7 +15,7 @@ import {
   type SyncCursor,
   type SyncEvent,
   type SyncOptions,
-} from "@mailmcp/module-sdk";
+} from "@cloud-mail-mcp/module-sdk";
 import { ImapFlow, type MailboxObject } from "imapflow";
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
@@ -365,7 +365,7 @@ export class ImapConnector implements Connector {
   }
 
   async send(msg: OutboundMessage, sentFolder?: RemoteFolder): Promise<SentResult> {
-    const domain = msg.from.email.split("@")[1] ?? "mailmcp.local";
+    const domain = msg.from.email.split("@")[1] ?? "cloud-mail-mcp.local";
     const messageId = `<${randomUUID()}@${domain}>`;
     const wire = await this.compose(msg, messageId, false);
     const recipients = [...msg.to, ...(msg.cc ?? []), ...(msg.bcc ?? [])].map((a) => a.email);
@@ -399,7 +399,7 @@ export class ImapConnector implements Connector {
   }
 
   async saveDraft(msg: OutboundMessage, drafts: RemoteFolder, replace?: MessageRef): Promise<void> {
-    const domain = msg.from.email.split("@")[1] ?? "mailmcp.local";
+    const domain = msg.from.email.split("@")[1] ?? "cloud-mail-mcp.local";
     const raw = await this.compose(msg, `<${randomUUID()}@${domain}>`, true);
     const client = await this.imap();
     await client.append(drafts.remoteId, raw, ["\\Draft", "\\Seen"]);

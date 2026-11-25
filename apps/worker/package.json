@@ -1,5 +1,5 @@
 {
-  "name": "@mailmcp/worker",
+  "name": "@cloud-mail-mcp/worker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,14 +12,14 @@
     "test": "node --import tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
-    "@mailmcp/core": "workspace:*",
-    "@mailmcp/db": "workspace:*",
-    "@mailmcp/module-imap": "workspace:*",
-    "@mailmcp/module-sdk": "workspace:*",
+    "@cloud-mail-mcp/core": "workspace:*",
+    "@cloud-mail-mcp/db": "workspace:*",
+    "@cloud-mail-mcp/module-imap": "workspace:*",
+    "@cloud-mail-mcp/module-sdk": "workspace:*",
     "pg-boss": "^12.38.2"
   },
   "devDependencies": {
-    "@mailmcp/search": "workspace:*",
+    "@cloud-mail-mcp/search": "workspace:*",
     "@types/nodemailer": "^8.0.2",
     "imapflow": "^2.12.1",
     "nodemailer": "^10.6.0"

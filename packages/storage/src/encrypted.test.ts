@@ -8,7 +8,7 @@ import { EncryptedBlobStore } from "./encrypted";
 import { FsBlobStore } from "./fs";
 
 test("round-trips, compresses, and never writes plaintext", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "mailmcp-blob-"));
+  const dir = await mkdtemp(join(tmpdir(), "cloud-mail-mcp-blob-"));
   try {
     const store = new EncryptedBlobStore(new FsBlobStore(dir));
     const key = randomBytes(32);
@@ -27,7 +27,7 @@ test("round-trips, compresses, and never writes plaintext", async () => {
 });
 
 test("rejects wrong key and blobs moved to another key", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "mailmcp-blob-"));
+  const dir = await mkdtemp(join(tmpdir(), "cloud-mail-mcp-blob-"));
   try {
     const inner = new FsBlobStore(dir);
     const store = new EncryptedBlobStore(inner);
@@ -42,6 +42,6 @@ test("rejects wrong key and blobs moved to another key", async () => {
 });
 
 test("fs store refuses path traversal", async () => {
-  const store = new FsBlobStore("/tmp/mailmcp-never");
+  const store = new FsBlobStore("/tmp/cloud-mail-mcp-never");
   await assert.rejects(store.put("../escape", Buffer.from("x")));
 });

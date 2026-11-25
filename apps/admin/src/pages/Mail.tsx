@@ -325,8 +325,8 @@ function UnsubscribeButton({
           window.confirm(
             `Unsubscribe from ${sender}?\n\n${
               u.method === "one_click"
-                ? "MailMCP will use the sender's one-click unsubscribe link."
-                : "MailMCP will send the sender an unsubscribe email from this account."
+                ? "Cloud Mail MCP will use the sender's one-click unsubscribe link."
+                : "Cloud Mail MCP will send the sender an unsubscribe email from this account."
             }`,
           )
         )
@@ -645,7 +645,7 @@ export function MailPage() {
   const byAccountRef = useRef<Map<string, MailFolder[]>>(new Map());
   const [sort, setSort] = useState<string>(() => {
     try {
-      return localStorage.getItem("mailmcp.sort") ?? "date:desc";
+      return localStorage.getItem("cloud-mail-mcp.sort") ?? "date:desc";
     } catch {
       return "date:desc";
     }
@@ -655,7 +655,7 @@ export function MailPage() {
     setSelected(null);
     setChecked(new Set());
     try {
-      localStorage.setItem("mailmcp.sort", v);
+      localStorage.setItem("cloud-mail-mcp.sort", v);
     } catch {
       // storage unavailable (private mode): keep it for this session only
     }
@@ -663,7 +663,7 @@ export function MailPage() {
   const [sortField, sortOrder] = sort.split(":") as [string, string];
   const [unreadOnly, setUnreadOnly] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("mailmcp.unreadOnly") === "1";
+      return localStorage.getItem("cloud-mail-mcp.unreadOnly") === "1";
     } catch {
       return false;
     }
@@ -674,7 +674,7 @@ export function MailPage() {
     setSelected(null);
     setChecked(new Set());
     try {
-      localStorage.setItem("mailmcp.unreadOnly", v ? "1" : "0");
+      localStorage.setItem("cloud-mail-mcp.unreadOnly", v ? "1" : "0");
     } catch {
       // storage unavailable: keep it for this visit only
     }
@@ -962,7 +962,7 @@ export function MailPage() {
   // Folder list: each account folds away. With many accounts, start folded except the open one.
   const [expanded, setExpanded] = useState<Set<string> | null>(() => {
     try {
-      const v = localStorage.getItem("mailmcp.expanded");
+      const v = localStorage.getItem("cloud-mail-mcp.expanded");
       return v ? new Set(JSON.parse(v) as string[]) : null;
     } catch {
       return null;
@@ -974,7 +974,7 @@ export function MailPage() {
   const saveExpanded = (next: Set<string>) => {
     setExpanded(next);
     try {
-      localStorage.setItem("mailmcp.expanded", JSON.stringify([...next]));
+      localStorage.setItem("cloud-mail-mcp.expanded", JSON.stringify([...next]));
     } catch {
       // storage unavailable: remember for this visit only
     }

@@ -69,30 +69,30 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^1.12.0
         version: 1.12.0(zod@4.6.7)
+      '@cloud-mail-mcp/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cloud-mail-mcp/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@cloud-mail-mcp/module-imap':
+        specifier: workspace:*
+        version: link:../../modules/imap
+      '@cloud-mail-mcp/module-sdk':
+        specifier: workspace:*
+        version: link:../../packages/module-sdk
+      '@cloud-mail-mcp/search':
+        specifier: workspace:*
+        version: link:../../packages/search
+      '@cloud-mail-mcp/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@fastify/cookie':
         specifier: ^11.1.5
         version: 11.1.5
       '@fastify/static':
         specifier: ^10.1.11
         version: 10.1.11
-      '@mailmcp/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@mailmcp/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@mailmcp/module-imap':
-        specifier: workspace:*
-        version: link:../../modules/imap
-      '@mailmcp/module-sdk':
-        specifier: workspace:*
-        version: link:../../packages/module-sdk
-      '@mailmcp/search':
-        specifier: workspace:*
-        version: link:../../packages/search
-      '@mailmcp/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
@@ -121,23 +121,23 @@ importers:
 
   apps/worker:
     dependencies:
-      '@mailmcp/core':
+      '@cloud-mail-mcp/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@mailmcp/db':
+      '@cloud-mail-mcp/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@mailmcp/module-imap':
+      '@cloud-mail-mcp/module-imap':
         specifier: workspace:*
         version: link:../../modules/imap
-      '@mailmcp/module-sdk':
+      '@cloud-mail-mcp/module-sdk':
         specifier: workspace:*
         version: link:../../packages/module-sdk
       pg-boss:
         specifier: ^12.38.2
         version: 12.38.2(@opentelemetry/api@1.10.0)
     devDependencies:
-      '@mailmcp/search':
+      '@cloud-mail-mcp/search':
         specifier: workspace:*
         version: link:../../packages/search
       '@types/nodemailer':
@@ -152,7 +152,7 @@ importers:
 
   modules/imap:
     dependencies:
-      '@mailmcp/module-sdk':
+      '@cloud-mail-mcp/module-sdk':
         specifier: workspace:*
         version: link:../../packages/module-sdk
       imapflow:
@@ -174,16 +174,16 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^1.12.0
         version: 1.12.0(zod@4.6.7)
-      '@mailmcp/db':
+      '@cloud-mail-mcp/db':
         specifier: workspace:*
         version: link:../db
-      '@mailmcp/module-sdk':
+      '@cloud-mail-mcp/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
-      '@mailmcp/search':
+      '@cloud-mail-mcp/search':
         specifier: workspace:*
         version: link:../search
-      '@mailmcp/storage':
+      '@cloud-mail-mcp/storage':
         specifier: workspace:*
         version: link:../storage
       mailparser:
@@ -224,7 +224,7 @@ importers:
 
   packages/search:
     dependencies:
-      '@mailmcp/db':
+      '@cloud-mail-mcp/db':
         specifier: workspace:*
         version: link:../db
 

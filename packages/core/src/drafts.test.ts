@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { defineModule } from "@mailmcp/module-sdk";
+import { defineModule } from "@cloud-mail-mcp/module-sdk";
 import { z } from "zod";
 import { AccountDraftService } from "./drafts";
 import { ModuleRegistry } from "./registry";

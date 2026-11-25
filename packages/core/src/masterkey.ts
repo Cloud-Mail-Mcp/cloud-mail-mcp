@@ -7,16 +7,17 @@ import { join } from "node:path";
  * (a DB dump alone must not be enough to decrypt credentials or mail).
  *
  * Resolution order:
- *   1. MAILMCP_MASTER_KEY env (base64, 32 bytes) — for Docker secrets / KMS-injected keys
+ *   1. CLOUD_MAIL_MCP_MASTER_KEY env (base64, 32 bytes) — for Docker secrets / KMS-injected keys
  *   2. <dataDir>/master.key — auto-generated on first start (chmod 600). BACK THIS FILE UP.
  */
 export async function loadOrCreateMasterKey(
   dataDir: string,
   env = process.env,
 ): Promise<{ key: Buffer; source: "env" | "file" | "generated"; path?: string }> {
-  if (env.MAILMCP_MASTER_KEY) {
-    const key = Buffer.from(env.MAILMCP_MASTER_KEY, "base64");
-    if (key.length !== 32) throw new Error("MAILMCP_MASTER_KEY must be 32 bytes, base64-encoded");
+  if (env.CLOUD_MAIL_MCP_MASTER_KEY) {
+    const key = Buffer.from(env.CLOUD_MAIL_MCP_MASTER_KEY, "base64");
+    if (key.length !== 32)
+      throw new Error("CLOUD_MAIL_MCP_MASTER_KEY must be 32 bytes, base64-encoded");
     return { key, source: "env" };
   }
   const path = join(dataDir, "master.key");

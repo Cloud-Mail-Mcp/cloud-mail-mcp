@@ -1,4 +1,4 @@
-import { runtime } from "@mailmcp/core";
+import { runtime } from "@cloud-mail-mcp/core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { RemoteFolder } from "@mailmcp/module-sdk";
+import type { RemoteFolder } from "@cloud-mail-mcp/module-sdk";
 import { assignNameRoles } from "./roles";
 
 const f = (path: string, role?: RemoteFolder["role"]): RemoteFolder => ({

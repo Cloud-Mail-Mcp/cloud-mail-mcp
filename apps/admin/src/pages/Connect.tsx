@@ -125,7 +125,11 @@ export function ConnectPage() {
             </Field>
           )}
 
-          <Field label="Name" htmlFor="name" hint="How this app appears in MailMCP's Agents list.">
+          <Field
+            label="Name"
+            htmlFor="name"
+            hint="How this app appears in Cloud Mail MCP's Agents list."
+          >
             <Input
               id="name"
               value={name}
@@ -136,7 +140,7 @@ export function ConnectPage() {
 
           {d.mailboxes.length === 0 ? (
             <Alert tone="warning" title="No mailboxes yet">
-              Add a mailbox in MailMCP first; this app would have nothing to read.
+              Add a mailbox in Cloud Mail MCP first; this app would have nothing to read.
             </Alert>
           ) : (
             <div className="space-y-3">
@@ -176,7 +180,7 @@ export function ConnectPage() {
                 </details>
               )}
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Sending always waits for your approval in MailMCP unless you change it later.
+                Sending always waits for your approval in Cloud Mail MCP unless you change it later.
                 Deleting mail isn't included in these choices; grant it per agent if you need it.
               </p>
             </div>
@@ -241,7 +245,7 @@ function Frame({ children }: { children: React.ReactNode }) {
     <main className="flex min-h-screen items-start justify-center bg-zinc-50 px-4 py-12 dark:bg-zinc-950">
       <div className="w-full max-w-lg">
         <p className="mb-4 text-center text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-          MailMCP
+          Cloud Mail MCP
         </p>
         {children}
       </div>

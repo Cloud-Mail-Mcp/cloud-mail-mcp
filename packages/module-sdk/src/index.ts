@@ -1,5 +1,5 @@
 /**
- * MailMCP Module API (v1).
+ * Cloud Mail MCP Module API (v1).
  *
  * Every mail provider, including the built-in IMAP module, is a module. The core never
  * imports provider code directly; it loads modules and talks to them through these types.

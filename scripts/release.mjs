@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cut a MailMCP release. One command updates every install method together:
+ * Cut a Cloud Mail MCP release. One command updates every install method together:
  *
  *   pnpm release 0.2.0            bump versions, check, commit, tag v0.2.0, push
  *   pnpm release 0.2.0 --dry-run  show what would happen, change nothing
@@ -117,7 +117,7 @@ const edits = [
         .replace(/(default:\s*ghcr\.io\/[^\s:]+:)\S+/, `$1${version}`)
         .replace(
           /changeLog:\n/,
-          `changeLog:\n  - date: ${today}\n    description: MailMCP ${tag}\n`,
+          `changeLog:\n  - date: ${today}\n    description: Cloud Mail MCP ${tag}\n`,
         ),
   },
   {
@@ -181,7 +181,7 @@ if (dry) {
 }
 sh("git", ["add", ...edits.map((e) => e.file)]);
 sh("git", ["commit", "-q", "-m", `Release ${tag}`]);
-sh("git", ["tag", "-a", tag, "-m", `MailMCP ${tag}`]);
+sh("git", ["tag", "-a", tag, "-m", `Cloud Mail MCP ${tag}`]);
 sh("git", ["push", "--atomic", "-q", "origin", "main", tag], { stdio: "inherit" });
 
 const repo = sh("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]);

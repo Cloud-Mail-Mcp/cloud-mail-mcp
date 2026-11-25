@@ -2,7 +2,7 @@
  * In-app chat: the streaming tool loop against a fake Anthropic API (no real API calls or cost).
  * The fake streams one tool call (list_accounts), then a text answer; the test checks that the
  * tool ran through the agent's MCP tools and that the conversation comes back for the next turn.
- * Needs Postgres only.  pnpm --filter @mailmcp/server test
+ * Needs Postgres only.  pnpm --filter @cloud-mail-mcp/server test
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -11,8 +11,8 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { appSettings, createDb, eq, memberships, orgs, users } from "@mailmcp/db";
-import { prepareTestDatabase } from "@mailmcp/db/testing";
+import { appSettings, createDb, eq, memberships, orgs, users } from "@cloud-mail-mcp/db";
+import { prepareTestDatabase } from "@cloud-mail-mcp/db/testing";
 import { type AppDeps, buildApp } from "../src/app";
 import { hashPassword } from "../src/auth";
 import { config } from "../src/config";
@@ -129,7 +129,7 @@ before(async () => {
   const d = createDb(testUrl);
   const built = await buildApp({
     db: d.db,
-    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "mailmcp-chat-e2e") },
+    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "cloud-mail-mcp-chat-e2e") },
     masterKey: Buffer.alloc(32, 9),
     masterKeyInfo: { source: "env" },
     logger: false,

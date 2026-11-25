@@ -1,4 +1,4 @@
-import { accounts, and, desc, eq, senderRules, sorterExamples } from "@mailmcp/db";
+import { accounts, and, desc, eq, senderRules, sorterExamples } from "@cloud-mail-mcp/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";

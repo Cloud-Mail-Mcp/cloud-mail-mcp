@@ -18,7 +18,7 @@ const STEPS = [
   {
     title: "Mailbox",
     blurb:
-      "Connect the first mailbox MailMCP should index. You can add more any time under Accounts.",
+      "Connect the first mailbox Cloud Mail MCP should index. You can add more any time under Accounts.",
   },
   { title: "Finish", blurb: "Back up your encryption key, then connect your AI." },
 ];
@@ -97,7 +97,7 @@ export function SetupWizard({ hasUsers }: { hasUsers: boolean }) {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-              Set up MailMCP
+              Set up Cloud Mail MCP
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               This takes about two minutes and only happens once.

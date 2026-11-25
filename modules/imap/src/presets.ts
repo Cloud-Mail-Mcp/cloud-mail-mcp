@@ -1,4 +1,4 @@
-import type { ProviderPreset } from "@mailmcp/module-sdk";
+import type { ProviderPreset } from "@cloud-mail-mcp/module-sdk";
 
 export const presets: ProviderPreset[] = [
   {
@@ -16,7 +16,7 @@ export const presets: ProviderPreset[] = [
         link: { label: "Open Apple Account", url: "https://account.apple.com/account/manage" },
       },
       {
-        text: 'Create a password named "MailMCP". Apple shows it once, as xxxx-xxxx-xxxx-xxxx.',
+        text: 'Create a password named "Cloud Mail MCP". Apple shows it once, as xxxx-xxxx-xxxx-xxxx.',
       },
       {
         text: "Paste it into Password below, dashes included. Use your full iCloud address (…@icloud.com) as the email.",
@@ -41,7 +41,7 @@ export const presets: ProviderPreset[] = [
         },
       },
       {
-        text: 'Create an app password named "MailMCP". Google shows a 16-letter password once. On Google Workspace, if the page says app passwords aren\'t available, ask your admin to allow them.',
+        text: 'Create an app password named "Cloud Mail MCP". Google shows a 16-letter password once. On Google Workspace, if the page says app passwords aren\'t available, ask your admin to allow them.',
         link: { label: "Create an app password", url: "https://myaccount.google.com/apppasswords" },
       },
       { text: "Paste it into Password below (spaces are removed for you)." },

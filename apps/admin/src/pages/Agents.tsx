@@ -90,10 +90,10 @@ export function KeyReveal({ apiKey, onDone }: { apiKey: string; onDone?: () => v
   const desktop = JSON.stringify(
     {
       mcpServers: {
-        mailmcp: {
+        "cloud-mail-mcp": {
           command: "npx",
-          args: ["-y", "mcp-remote", url, "--header", "Authorization:${MAILMCP_AUTH}"],
-          env: { MAILMCP_AUTH: `Bearer ${apiKey}` },
+          args: ["-y", "mcp-remote", url, "--header", "Authorization:${CLOUD_MAIL_MCP_AUTH}"],
+          env: { CLOUD_MAIL_MCP_AUTH: `Bearer ${apiKey}` },
         },
       },
     },
@@ -110,7 +110,7 @@ export function KeyReveal({ apiKey, onDone }: { apiKey: string; onDone?: () => v
         <CopyBlock label="API key" text={apiKey} />
         <CopyBlock
           label="Claude Code"
-          text={`claude mcp add --transport http mailmcp ${url} --header "Authorization: Bearer ${apiKey}"`}
+          text={`claude mcp add --transport http cloud-mail-mcp ${url} --header "Authorization: Bearer ${apiKey}"`}
         />
         <CopyBlock label="Claude Desktop (claude_desktop_config.json)" text={desktop} />
         <CopyBlock
@@ -125,7 +125,7 @@ export function KeyReveal({ apiKey, onDone }: { apiKey: string; onDone?: () => v
 
 // ───────────────────────────── List ─────────────────────────────
 
-/** The easy path: paste one URL into the AI app and approve on MailMCP's sign-in page. */
+/** The easy path: paste one URL into the AI app and approve on Cloud Mail MCP's sign-in page. */
 function ConnectAppCard() {
   const url = useMcpUrl();
   const [open, setOpen] = useState<string | null>(null);
@@ -133,9 +133,9 @@ function ConnectAppCard() {
     [
       "Claude (claude.ai, Desktop, mobile)",
       <>
-        Settings → <b>Connectors</b> → <b>Add custom connector</b>. Name it “MailMCP”, paste the
-        URL, click <b>Add</b>, then <b>Connect</b>. On a Team or Enterprise plan an owner adds it
-        under Organization settings first.
+        Settings → <b>Connectors</b> → <b>Add custom connector</b>. Name it “Cloud Mail MCP”, paste
+        the URL, click <b>Add</b>, then <b>Connect</b>. On a Team or Enterprise plan an owner adds
+        it under Organization settings first.
       </>,
     ],
     [
@@ -151,7 +151,7 @@ function ConnectAppCard() {
       <>
         Run{" "}
         <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
-          claude mcp add --transport http mailmcp {url}
+          claude mcp add --transport http cloud-mail-mcp {url}
         </code>
         , then type <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">/mcp</code> in
         Claude Code and choose <b>Authenticate</b>.
@@ -176,7 +176,7 @@ function ConnectAppCard() {
         <CopyBlock label="MCP server URL" text={url} />
         {!url.startsWith("https://") && (
           <Alert tone="warning" title="Claude and ChatGPT need an https:// address">
-            Set your public https URL in Settings → Server, or put MailMCP behind HTTPS.
+            Set your public https URL in Settings → Server, or put Cloud Mail MCP behind HTTPS.
           </Alert>
         )}
         <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">

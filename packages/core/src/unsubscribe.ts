@@ -103,7 +103,7 @@ export async function oneClickUnsubscribe(link: string): Promise<void> {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
-        "user-agent": "MailMCP (List-Unsubscribe one-click)",
+        "user-agent": "Cloud Mail MCP (List-Unsubscribe one-click)",
       },
       body: "List-Unsubscribe=One-Click",
       redirect: "manual",

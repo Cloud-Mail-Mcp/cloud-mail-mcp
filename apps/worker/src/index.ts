@@ -1,9 +1,9 @@
-import { createServices, loadOrCreateMasterKey, runtime, startWorker } from "@mailmcp/core";
-import { createDb } from "@mailmcp/db";
-import imapModule from "@mailmcp/module-imap";
-import type { ModuleManifest } from "@mailmcp/module-sdk";
+import { createServices, loadOrCreateMasterKey, runtime, startWorker } from "@cloud-mail-mcp/core";
+import { createDb } from "@cloud-mail-mcp/db";
+import imapModule from "@cloud-mail-mcp/module-imap";
+import type { ModuleManifest } from "@cloud-mail-mcp/module-sdk";
 
-/** Standalone worker process (Docker / development). The logic lives in @mailmcp/core. */
+/** Standalone worker process (Docker / development). The logic lives in @cloud-mail-mcp/core. */
 const databaseUrl = runtime.databaseUrl;
 if (!databaseUrl) {
   console.error(

@@ -1,6 +1,4 @@
 import { existsSync } from "node:fs";
-import fastifyCookie from "@fastify/cookie";
-import fastifyStatic from "@fastify/static";
 import {
   AccessDenied,
   AccountError,
@@ -15,10 +13,12 @@ import {
   PolicyService,
   type Services,
   SorterService,
-} from "@mailmcp/core";
-import { type Db, sql } from "@mailmcp/db";
-import imapModule from "@mailmcp/module-imap";
-import type { ModuleManifest } from "@mailmcp/module-sdk";
+} from "@cloud-mail-mcp/core";
+import { type Db, sql } from "@cloud-mail-mcp/db";
+import imapModule from "@cloud-mail-mcp/module-imap";
+import type { ModuleManifest } from "@cloud-mail-mcp/module-sdk";
+import fastifyCookie from "@fastify/cookie";
+import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { ZodError } from "zod";
 import type { config as appConfig } from "./config";

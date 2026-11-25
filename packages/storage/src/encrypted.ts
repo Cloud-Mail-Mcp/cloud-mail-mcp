@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import type { BlobStore } from "./types";
 
-const MAGIC = Buffer.from("MMB1"); // MailMCP blob, format v1
+const MAGIC = Buffer.from("MMB1"); // Cloud Mail MCP blob, format v1
 const IV_LEN = 12;
 const TAG_LEN = 16;
 

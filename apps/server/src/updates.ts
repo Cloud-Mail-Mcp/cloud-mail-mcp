@@ -2,17 +2,17 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runtime } from "@mailmcp/core";
+import { runtime } from "@cloud-mail-mcp/core";
 
 /**
  * Build/version info and self-update plumbing.
  *
- * Installs from the public repo run the published Docker image, which has MAILMCP_VERSION,
- * MAILMCP_REVISION and MAILMCP_REPO baked in by the release workflow. Forks publish under their
+ * Installs from the public repo run the published Docker image, which has CLOUD_MAIL_MCP_VERSION,
+ * CLOUD_MAIL_MCP_REVISION and CLOUD_MAIL_MCP_REPO baked in by the release workflow. Forks publish under their
  * own repo, so each install checks for updates from the repo its image was built from.
  *
  * Updating is done by the small `updater` container (deploy/compose.yml): the server drops a
- * request file into a shared folder; the updater pulls the new image and recreates MailMCP.
+ * request file into a shared folder; the updater pulls the new image and recreates Cloud Mail MCP.
  */
 
 const pkgVersion = (() => {
@@ -30,14 +30,16 @@ const pkgVersion = (() => {
 })();
 
 export const build = {
-  version: process.env.MAILMCP_VERSION || `${pkgVersion}-dev`,
-  revision: process.env.MAILMCP_REVISION || null,
+  version: process.env.CLOUD_MAIL_MCP_VERSION || `${pkgVersion}-dev`,
+  revision: process.env.CLOUD_MAIL_MCP_REVISION || null,
   /** "owner/name" on GitHub. Empty for source checkouts without a published image. */
-  repo: (process.env.MAILMCP_REPO || "").toLowerCase(),
+  repo: (process.env.CLOUD_MAIL_MCP_REPO || "").toLowerCase(),
   /** Image tag this install follows: "latest" (stable releases) or "edge" (every change on main). */
   channel:
-    (process.env.MAILMCP_TAG || "latest") === "edge" ? ("edge" as const) : ("stable" as const),
-  controlDir: process.env.MAILMCP_CONTROL_DIR || null,
+    (process.env.CLOUD_MAIL_MCP_TAG || "latest") === "edge"
+      ? ("edge" as const)
+      : ("stable" as const),
+  controlDir: process.env.CLOUD_MAIL_MCP_CONTROL_DIR || null,
 };
 
 export interface UpdateCheck {
@@ -71,7 +73,7 @@ let cache: { at: number; channel: string; value: UpdateCheck } | null = null;
 
 async function gh<T>(path: string): Promise<T> {
   const r = await fetch(`https://api.github.com/repos/${build.repo}${path}`, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "MailMCP-update-check" },
+    headers: { accept: "application/vnd.github+json", "user-agent": "Cloud Mail MCP-update-check" },
     signal: AbortSignal.timeout(10_000),
   });
   if (r.status === 404) throw new Error("No published releases found for this repository yet.");

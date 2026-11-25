@@ -15,7 +15,7 @@ import {
   pgArray,
   sql,
   threads,
-} from "@mailmcp/db";
+} from "@cloud-mail-mcp/db";
 import {
   type Connector,
   type EmailAddress,
@@ -25,9 +25,9 @@ import {
   type MessageRef,
   ProviderLimitError,
   type RemoteFolder,
-} from "@mailmcp/module-sdk";
-import type { MailDoc, SearchIndex } from "@mailmcp/search";
-import { blobKeys } from "@mailmcp/storage";
+} from "@cloud-mail-mcp/module-sdk";
+import type { MailDoc, SearchIndex } from "@cloud-mail-mcp/search";
+import { blobKeys } from "@cloud-mail-mcp/storage";
 import type { AccountRow, AccountService } from "./accounts";
 import type { BlobService } from "./blobs";
 import { parseChecks } from "./checks";

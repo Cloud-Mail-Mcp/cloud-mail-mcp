@@ -1,4 +1,4 @@
-import { auditLog, type Db } from "@mailmcp/db";
+import { auditLog, type Db } from "@cloud-mail-mcp/db";
 
 export interface AuditEntry {
   orgId: string;

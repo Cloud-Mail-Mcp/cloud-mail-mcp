@@ -1,17 +1,19 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 /**
- * Envelope encryption (docs/SPEC.md §9): the master key (env MAILMCP_MASTER_KEY) only
+ * Envelope encryption (docs/SPEC.md §9): the master key (env CLOUD_MAIL_MCP_MASTER_KEY) only
  * wraps per-account data keys; data keys encrypt credentials and blobs.
  */
 const IV = 12;
 const TAG = 16;
 
 export function loadMasterKey(env = process.env): Buffer {
-  const b64 = env.MAILMCP_MASTER_KEY;
-  if (!b64) throw new Error("MAILMCP_MASTER_KEY is not set (generate: openssl rand -base64 32)");
+  const b64 = env.CLOUD_MAIL_MCP_MASTER_KEY;
+  if (!b64)
+    throw new Error("CLOUD_MAIL_MCP_MASTER_KEY is not set (generate: openssl rand -base64 32)");
   const key = Buffer.from(b64, "base64");
-  if (key.length !== 32) throw new Error("MAILMCP_MASTER_KEY must be 32 bytes, base64-encoded");
+  if (key.length !== 32)
+    throw new Error("CLOUD_MAIL_MCP_MASTER_KEY must be 32 bytes, base64-encoded");
   return key;
 }
 

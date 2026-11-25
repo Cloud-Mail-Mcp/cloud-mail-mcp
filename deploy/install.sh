@@ -1,24 +1,26 @@
 #!/bin/sh
-# MailMCP installer — sets up the Docker stack in a folder and starts it.
+# Cloud Mail MCP installer — sets up the Docker stack in a folder and starts it.
 #
-#   curl -fsSL https://github.com/Cloud-Mail-Mcp/mailmcp/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/latest/download/install.sh | sh
 #   curl -fsSL …/install.sh | sh -s -- --domain mail.example.com
 #
 # Options:
 #   --domain NAME     serve on https://NAME with automatic certificates (DNS must point here)
-#   --dir PATH        install folder (default: ./mailmcp)
+#   --dir PATH        install folder (default: ./cloud-mail-mcp)
 #   --edge            follow every change on the main branch instead of stable releases
 #   --auto-update     apply updates automatically once a day
 #   --repo OWNER/NAME install from a different repository (forks)
 #   --port N          port for plain-HTTP installs without a domain (default 8787)
 #
-# Advanced (mirrors / air-gapped): MAILMCP_IMAGE=registry/name, MAILMCP_COMPOSE_URL=<url or file://>
+# Advanced (mirrors / air-gapped): CLOUD_MAIL_MCP_IMAGE=registry/name, CLOUD_MAIL_MCP_COMPOSE_URL=<url or file://>
 #
 # Re-running in an existing folder upgrades compose.yml and restarts; .env is kept.
 set -eu
 
-REPO="${MAILMCP_REPO:-__REPO__}" # filled in by the release workflow
-DIR="./mailmcp"
+REPO="${CLOUD_MAIL_MCP_REPO:-${MAILMCP_REPO:-__REPO__}}" # filled in by the release workflow
+# Installs made before the rename live in ./mailmcp: re-running there upgrades that install.
+DIR="./cloud-mail-mcp"
+[ -d ./mailmcp ] && [ ! -d ./cloud-mail-mcp ] && DIR="./mailmcp"
 DOMAIN=""
 TAG="latest"
 AUTO_UPDATE="false"
@@ -41,15 +43,15 @@ say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
 case "$REPO" in
-  __REPO__|"") [ -n "${MAILMCP_IMAGE:-}" ] && [ -n "${MAILMCP_COMPOSE_URL:-}" ] || die "Repository unknown. Use the install.sh from a GitHub release, or pass --repo owner/name." ;;
+  __REPO__|"") [ -n "${CLOUD_MAIL_MCP_IMAGE:-${MAILMCP_IMAGE:-}}" ] && [ -n "${CLOUD_MAIL_MCP_COMPOSE_URL:-${MAILMCP_COMPOSE_URL:-}}" ] || die "Repository unknown. Use the install.sh from a GitHub release, or pass --repo owner/name." ;;
 esac
 command -v docker >/dev/null 2>&1 || die "Docker is required: https://docs.docker.com/engine/install/"
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required (the 'docker compose' command)."
 command -v curl >/dev/null 2>&1 || die "curl is required."
 
 REPO_LC=$(printf '%s' "$REPO" | tr 'A-Z' 'a-z')
-IMAGE="${MAILMCP_IMAGE:-ghcr.io/$REPO_LC}"
-COMPOSE_URL="${MAILMCP_COMPOSE_URL:-https://github.com/$REPO/releases/latest/download/compose.yml}"
+IMAGE="${CLOUD_MAIL_MCP_IMAGE:-${MAILMCP_IMAGE:-ghcr.io/$REPO_LC}}"
+COMPOSE_URL="${CLOUD_MAIL_MCP_COMPOSE_URL:-${MAILMCP_COMPOSE_URL:-https://github.com/$REPO/releases/latest/download/compose.yml}}"
 mkdir -p "$DIR"
 cd "$DIR"
 
@@ -61,31 +63,33 @@ if [ ! -f .env ]; then
   say "Creating .env"
   PW=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
   {
-    echo "# MailMCP settings for docker compose. Mail accounts and everything else are set in the admin panel."
-    echo "MAILMCP_IMAGE=$IMAGE"
-    echo "MAILMCP_TAG=$TAG"
+    echo "# Cloud Mail MCP settings for docker compose. Mail accounts and everything else are set in the admin panel."
+    echo "CLOUD_MAIL_MCP_IMAGE=$IMAGE"
+    echo "CLOUD_MAIL_MCP_TAG=$TAG"
     echo "POSTGRES_PASSWORD=$PW"
     echo "AUTO_UPDATE=$AUTO_UPDATE"
     if [ -n "$DOMAIN" ]; then
       echo "DOMAIN=$DOMAIN"
       echo "COMPOSE_PROFILES=https"
-      echo "MAILMCP_BIND=127.0.0.1:8787"
+      echo "CLOUD_MAIL_MCP_BIND=127.0.0.1:8787"
       echo "SECURE_COOKIES=true"
       echo "TRUST_PROXY=true"
     else
       echo "# No domain: plain HTTP on port $PORT. Re-run with --domain for HTTPS."
-      echo "MAILMCP_BIND=0.0.0.0:$PORT"
+      echo "CLOUD_MAIL_MCP_BIND=0.0.0.0:$PORT"
       echo "SECURE_COOKIES=false"
     fi
   } > .env
   chmod 600 .env
 else
   say "Keeping existing .env"
+  # The image moved with the project's new name (the old name keeps receiving updates too).
+  sed -i.bak 's#ghcr.io/cloud-mail-mcp/mailmcp$#ghcr.io/cloud-mail-mcp/cloud-mail-mcp#' .env && rm -f .env.bak
 fi
 
 say "Pulling images"
 docker compose pull
-say "Starting MailMCP"
+say "Starting Cloud Mail MCP"
 docker compose up -d
 
 URL="http://$(hostname 2>/dev/null || echo localhost):$PORT"
@@ -94,7 +98,7 @@ grep -q '^DOMAIN=' .env && URL="https://$(sed -n 's/^DOMAIN=//p' .env)"
 
 cat <<EOF
 
-  MailMCP is starting. Open $URL and follow the setup wizard.
+  Cloud Mail MCP is starting. Open $URL and follow the setup wizard.
 
   Back up your encryption key once setup is done (it is NOT in the database):
     cd $(pwd) && docker compose cp mailmcp:/data/master.key ./master.key.backup

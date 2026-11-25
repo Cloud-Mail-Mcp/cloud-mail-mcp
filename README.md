@@ -1,22 +1,22 @@
-# MailMCP
+# Cloud Mail MCP
 
-Self-hosted email for AI agents. MailMCP connects all your mailboxes, keeps a fast local index of your mail, and lets AI agents (Claude, ChatGPT, or your own app) read, search, organize and send mail over MCP. Each agent has its own permissions per mailbox, sends can wait for your approval, and every action is recorded in an audit log.
+Self-hosted email for AI agents. Cloud Mail MCP connects all your mailboxes, keeps a fast local index of your mail, and lets AI agents (Claude, ChatGPT, or your own app) read, search, organize and send mail over MCP. Each agent has its own permissions per mailbox, sends can wait for your approval, and every action is recorded in an audit log.
 
 > **Status: v0.1, early but working end to end** for IMAP/SMTP mailboxes (cPanel and other hosting mail, Apple iCloud, Gmail via app password). Microsoft 365 and the Gmail API are next. See [docs/SPEC.md](docs/SPEC.md).
 
 ## Install on your server
 
-You need a Linux server (or any machine) with Docker. If you run your own fork, use your repository in place of `Cloud-Mail-Mcp/mailmcp`.
+You need a Linux server (or any machine) with Docker. If you run your own fork, use your repository in place of `Cloud-Mail-Mcp/cloud-mail-mcp`.
 
 ```bash
 # With your own domain: automatic HTTPS certificates (point the domain's DNS at the server first)
-curl -fsSL https://github.com/Cloud-Mail-Mcp/mailmcp/releases/latest/download/install.sh | sh -s -- --domain mail.example.com
+curl -fsSL https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/latest/download/install.sh | sh -s -- --domain mail.example.com
 
 # Without a domain: plain HTTP on port 8787 (trusted networks only)
-curl -fsSL https://github.com/Cloud-Mail-Mcp/mailmcp/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/latest/download/install.sh | sh
 ```
 
-The installer creates a `mailmcp/` folder with `compose.yml` and a `.env` (it generates a random database password), then starts everything. Open the address it prints and the **setup wizard** walks you through it:
+The installer creates a `cloud-mail-mcp/` folder with `compose.yml` and a `.env` (it generates a random database password), then starts everything. Open the address it prints and the **setup wizard** walks you through it:
 
 1. **Your account:** the owner login.
 2. **Server:** a name, and the public URL your AI clients will use.
@@ -29,22 +29,22 @@ The wizard only appears until it's finished. Everything after that is managed in
 Installer options: `--domain NAME`, `--dir PATH`, `--port N`, `--edge` (follow every change instead of stable releases), `--auto-update` (apply updates daily), `--repo OWNER/NAME`.
 
 > **Back up your encryption key.** It encrypts every saved mail password and all stored mail, and it is deliberately not in the database:
-> `cd mailmcp && docker compose cp mailmcp:/data/master.key ./master.key.backup`
+> `cd cloud-mail-mcp && docker compose cp mailmcp:/data/master.key ./master.key.backup`
 
 **Other ways to install:**
 
 - **[Enhance](docs/install/enhance.md):** GitHub deploy plus Node.js; no build step, and updates arrive automatically.
-- **[cPanel, Plesk or any Node.js host](docs/install/shared-hosting.md):** the prebuilt `mailmcp-node` zip.
+- **[cPanel, Plesk or any Node.js host](docs/install/shared-hosting.md):** the prebuilt `cloud-mail-mcp-node` zip.
 - **[Easypanel, Coolify, Dokploy, CapRover, Portainer](docs/install/panels.md):** the Docker image.
 
 ### Updates
 
-**Settings → Updates** shows the running version and whether a newer one exists. **Update now** pulls the new image and restarts MailMCP. Your data, settings and key are kept, and database changes apply automatically. You can also choose:
+**Settings → Updates** shows the running version and whether a newer one exists. **Update now** pulls the new image and restarts Cloud Mail MCP. Your data, settings and key are kept, and database changes apply automatically. You can also choose:
 
 - **Stable releases** (tagged versions) or **Every change** (the `edge` build of `main`).
 - Daily automatic updates (`AUTO_UPDATE=true` in `.env`).
 
-From the command line: `cd mailmcp && docker compose pull && docker compose up -d`.
+From the command line: `cd cloud-mail-mcp && docker compose pull && docker compose up -d`.
 
 ### Publishing your own version (forks)
 
@@ -59,7 +59,7 @@ One-time step after the first build: on GitHub open **Packages → your image �
 ### Try it locally from source
 
 ```bash
-git clone https://github.com/Cloud-Mail-Mcp/mailmcp mailmcp && cd mailmcp
+git clone https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp mailmcp && cd mailmcp
 docker compose -f deploy/docker-compose.yml up -d   # builds the image locally
 ```
 
@@ -67,13 +67,13 @@ Then open **http://localhost:8787**.
 
 ## Connect Claude, ChatGPT and other AI apps
 
-Your MCP server URL is your MailMCP address plus `/mcp`, e.g. `https://mail.example.com/mcp`. Apps that support MCP sign-in (OAuth) only need that URL: they send you to a MailMCP page where you choose which mailboxes the app can use and what it may do in each. Claude and ChatGPT require an `https://` address.
+Your MCP server URL is your Cloud Mail MCP address plus `/mcp`, e.g. `https://mail.example.com/mcp`. Apps that support MCP sign-in (OAuth) only need that URL: they send you to a Cloud Mail MCP page where you choose which mailboxes the app can use and what it may do in each. Claude and ChatGPT require an `https://` address.
 
 | App                               | How                                                                                                                  |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **Claude** (web, Desktop, mobile) | Settings → Connectors → **Add custom connector** → paste the URL → **Connect**                                       |
 | **ChatGPT**                       | Settings → Apps & Connectors → Advanced → turn on **Developer mode**, then create a connector with the URL and OAuth |
-| **Claude Code**                   | `claude mcp add --transport http mailmcp https://mail.example.com/mcp`, then `/mcp` → Authenticate                   |
+| **Claude Code**                   | `claude mcp add --transport http cloud-mail-mcp https://mail.example.com/mcp`, then `/mcp` → Authenticate            |
 | **Cursor, VS Code, others**       | Add a remote (HTTP) MCP server with the URL                                                                          |
 
 Connected apps appear under **Agents**, where you can change their access, disable them or remove them. The admin panel's Agents page shows your exact URL and these steps.
@@ -81,7 +81,7 @@ Connected apps appear under **Agents**, where you can change their access, disab
 **Apps without MCP sign-in:** create an agent with an API key under Agents and send it as a header:
 
 ```bash
-claude mcp add --transport http mailmcp https://mail.example.com/mcp --header "Authorization: Bearer mmcp_…"
+claude mcp add --transport http cloud-mail-mcp https://mail.example.com/mcp --header "Authorization: Bearer cmcp_…"
 ```
 
 Or, for clients that only run local servers (`claude_desktop_config.json` style):
@@ -89,16 +89,16 @@ Or, for clients that only run local servers (`claude_desktop_config.json` style)
 ```json
 {
   "mcpServers": {
-    "mailmcp": {
+    "cloud-mail-mcp": {
       "command": "npx",
       "args": [
         "-y",
         "mcp-remote",
         "https://mail.example.com/mcp",
         "--header",
-        "Authorization:${MAILMCP_AUTH}"
+        "Authorization:${CLOUD_MAIL_MCP_AUTH}"
       ],
-      "env": { "MAILMCP_AUTH": "Bearer mmcp_…" }
+      "env": { "CLOUD_MAIL_MCP_AUTH": "Bearer cmcp_…" }
     }
   }
 }
@@ -130,7 +130,7 @@ Prompts: `triage_inbox`, `summarize_thread`, `draft_reply`.
 ## Moving to a new mail host
 
 Changing hosting providers? Add the address twice under **Accounts**, once with the old server's
-settings and once with the new one. MailMCP labels each login with its server name (you can
+settings and once with the new one. Cloud Mail MCP labels each login with its server name (you can
 rename the labels, e.g. "Old host" / "New host"). Then open **Migrations**:
 
 1. Pick the old account as **Copy from** and the new one as **Copy to**. **Preview folders**
@@ -145,7 +145,7 @@ rename the labels, e.g. "Old host" / "New host"). Then open **Migrations**:
 4. When your MX records point to the new server and the old one has gone quiet, click **Finish**.
 
 If a password or server address changes later, update it on the account's page under **Login &
-server settings**. MailMCP tests the new settings before saving them.
+server settings**. Cloud Mail MCP tests the new settings before saving them.
 
 ## How it's built
 
@@ -176,9 +176,9 @@ Requires Node 22+ (`nvm use`), Docker, and pnpm (via `corepack enable`).
 pnpm install
 cp .env.example .env                       # only the database URL
 pnpm db:up && pnpm db:migrate              # Postgres on localhost:5433
-pnpm --filter @mailmcp/admin build
-pnpm --filter @mailmcp/server start        # http://127.0.0.1:8787/admin/
-pnpm --filter @mailmcp/worker start        # in another terminal
+pnpm --filter @cloud-mail-mcp/admin build
+pnpm --filter @cloud-mail-mcp/server start        # http://127.0.0.1:8787/admin/
+pnpm --filter @cloud-mail-mcp/worker start        # in another terminal
 ```
 
 `pnpm dev` runs everything with live reload (admin on http://localhost:5173/admin/).
@@ -187,8 +187,8 @@ pnpm --filter @mailmcp/worker start        # in another terminal
 
 ```bash
 docker compose -f deploy/docker-compose.yml --profile testmail up -d greenmail
-pnpm --filter @mailmcp/worker seed -- --count 3000   # realistic mail for alice@example.test
-pnpm --filter @mailmcp/worker sync-once              # sync all accounts in the foreground
+pnpm --filter @cloud-mail-mcp/worker seed -- --count 3000   # realistic mail for alice@example.test
+pnpm --filter @cloud-mail-mcp/worker sync-once              # sync all accounts in the foreground
 ```
 In the admin panel choose _Other IMAP server_ with host `127.0.0.1`, IMAP 3143, SMTP 3025, TLS off, user `alice@example.test` / `alice-pass-123`.
 

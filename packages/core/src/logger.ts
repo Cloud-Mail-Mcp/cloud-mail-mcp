@@ -1,4 +1,4 @@
-import type { Logger } from "@mailmcp/module-sdk";
+import type { Logger } from "@cloud-mail-mcp/module-sdk";
 
 /** Minimal structured logger (JSON lines) so worker and server logs are greppable. */
 export function createLogger(

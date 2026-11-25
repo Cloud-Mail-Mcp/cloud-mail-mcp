@@ -1,16 +1,16 @@
 /**
  * End-to-end: admin API + MCP endpoint (real MCP SDK client) against GreenMail.
  * Skips if GreenMail/Postgres aren't running (docker compose --profile testmail up -d).
- *   pnpm --filter @mailmcp/server test
+ *   pnpm --filter @cloud-mail-mcp/server test
  */
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createDb, eq, memberships, orgs, users } from "@mailmcp/db";
-import { prepareTestDatabase } from "@mailmcp/db/testing";
+import { apiKeys, createDb, eq, memberships, orgs, users } from "@cloud-mail-mcp/db";
+import { prepareTestDatabase } from "@cloud-mail-mcp/db/testing";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ImapFlow } from "imapflow";
@@ -136,7 +136,7 @@ before(async () => {
   const built = await buildApp({
     db: d.db,
     // Isolated from any dev install: own database, own data folder.
-    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "mailmcp-e2e") },
+    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "cloud-mail-mcp-e2e") },
     masterKey: Buffer.alloc(32, 9),
     masterKeyInfo: { source: "env" },
     logger: false,
@@ -169,7 +169,7 @@ before(async () => {
     body: JSON.stringify({ email, password: "e2e-password-123" }),
   });
   cookie = (r.headers.get("set-cookie") ?? "").split(";")[0] as string;
-  assert.ok(cookie.startsWith("mailmcp_session="));
+  assert.ok(cookie.startsWith("cloud_mail_mcp_session="));
 });
 
 after(async () => {
@@ -205,7 +205,7 @@ test("admin: add account, sync it, create agent with read-only grant", { skip },
   const created = await api("POST", "/agents", { name: "E2E agent" });
   agentId = created.agent.id;
   apiKey = created.apiKey;
-  assert.match(apiKey, /^mmcp_/);
+  assert.match(apiKey, /^cmcp_/);
   await api("PUT", `/agents/${agentId}/grants/${accountId}`, {
     scopes: ["mail:read"],
     sendPolicy: "deny",
@@ -216,10 +216,41 @@ test("admin: add account, sync it, create agent with read-only grant", { skip },
 test("mcp: bad key is rejected", { skip }, async () => {
   const r = await fetch(`${base}/mcp`, {
     method: "POST",
-    headers: { authorization: "Bearer mmcp_nope", "content-type": "application/json" },
+    headers: { authorization: "Bearer cmcp_nope", "content-type": "application/json" },
     body: "{}",
   });
   assert.equal(r.status, 401);
+});
+
+test("mcp: API keys and session cookies from before the rename still work", { skip }, async () => {
+  const legacy = `mmcp_${randomUUID().replaceAll("-", "")}`;
+  await deps.db.insert(apiKeys).values({
+    agentId,
+    prefix: legacy.slice(0, 12),
+    keyHash: createHash("sha256").update(legacy).digest("hex"),
+  });
+  const r = await fetch(`${base}/mcp`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${legacy}`,
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "t", version: "1" },
+      },
+    }),
+  });
+  assert.equal(r.status, 200, "an mmcp_ key is accepted");
+  const old = cookie.replace(/^cloud_mail_mcp_session=/, "mailmcp_session=");
+  const me = await fetch(`${base}/api/v1/auth/me`, { headers: { cookie: old } });
+  assert.equal(me.status, 200, "the old session cookie still signs you in");
 });
 
 test("mcp: tools are filtered by grant; reads work; email bodies marked untrusted", {

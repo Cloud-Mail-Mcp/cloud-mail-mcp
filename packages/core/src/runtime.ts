@@ -1,10 +1,11 @@
+import "./env-compat";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * How this copy of MailMCP was installed. Each install type keeps its files in a different
+ * How this copy of Cloud Mail MCP was installed. Each install type keeps its files in a different
  * place, so every path the app needs is resolved here.
  *
  * - source:  a git checkout (development)
@@ -14,18 +15,25 @@ import { fileURLToPath } from "node:url";
  */
 export type InstallType = "source" | "docker" | "compose" | "bundle";
 
-const install = (process.env.MAILMCP_INSTALL ?? "source") as InstallType;
+const install = (process.env.CLOUD_MAIL_MCP_INSTALL ?? "source") as InstallType;
 const bundled = install === "bundle";
 
 /** App root: the repo root for source/Docker, the unpacked folder for the bundle. */
-const home = process.env.MAILMCP_HOME ?? fileURLToPath(new URL("../../../", import.meta.url));
+const home =
+  process.env.CLOUD_MAIL_MCP_HOME ?? fileURLToPath(new URL("../../../", import.meta.url));
 
 /**
  * Persistent data (encryption key, local mail storage, saved DB connection). For the bundle it
- * lives OUTSIDE the app folder (~/mailmcp-data) so redeploys never touch it.
+ * lives OUTSIDE the app folder (~/cloud-mail-mcp-data) so redeploys never touch it.
  */
 const dataDir = (() => {
-  const d = process.env.MAILMCP_DATA_DIR ?? (bundled ? join(homedir(), "mailmcp-data") : "data");
+  // Bundles installed before the rename keep their data in ~/mailmcp-data.
+  const bundleDir = existsSync(join(homedir(), "cloud-mail-mcp-data"))
+    ? join(homedir(), "cloud-mail-mcp-data")
+    : existsSync(join(homedir(), "mailmcp-data"))
+      ? join(homedir(), "mailmcp-data")
+      : join(homedir(), "cloud-mail-mcp-data");
+  const d = process.env.CLOUD_MAIL_MCP_DATA_DIR ?? (bundled ? bundleDir : "data");
   return isAbsolute(d) ? d : resolve(home, d);
 })();
 
@@ -39,9 +47,11 @@ export const runtime = {
   dataDir,
   /** Database URL saved by the web installer (loaded at startup if DATABASE_URL isn't set). */
   configFile: join(dataDir, "config.env"),
-  adminDist: process.env.MAILMCP_ADMIN_DIST ?? join(home, bundled ? "admin" : "apps/admin/dist"),
+  adminDist:
+    process.env.CLOUD_MAIL_MCP_ADMIN_DIST ?? join(home, bundled ? "admin" : "apps/admin/dist"),
   migrationsDir:
-    process.env.MAILMCP_MIGRATIONS_DIR ?? join(home, bundled ? "drizzle" : "packages/db/drizzle"),
+    process.env.CLOUD_MAIL_MCP_MIGRATIONS_DIR ??
+    join(home, bundled ? "drizzle" : "packages/db/drizzle"),
   /**
    * Read at call time: the web installer sets it after startup. Source checkouts fall back to
    * the dev database; every other install type must be configured (or use the installer).

@@ -12,8 +12,8 @@ import {
   inArray,
   isNull,
   or,
-} from "@mailmcp/db";
-import type { SearchScope } from "@mailmcp/search";
+} from "@cloud-mail-mcp/db";
+import type { SearchScope } from "@cloud-mail-mcp/search";
 import { ALL_SCOPES, type Scope } from "./scopes";
 
 export type SendPolicy = "allow" | "approve" | "deny";
@@ -31,7 +31,7 @@ export interface AccountGrant {
 /** Everything an actor (admin user or agent) may do, resolved once per request. */
 export interface Access {
   orgId: string;
-  /** "system": MailMCP itself (the AI sorter acting on its own). */
+  /** "system": Cloud Mail MCP itself (the AI sorter acting on its own). */
   actor: { type: "user" | "agent" | "system"; id: string; name: string };
   grants: Map<string, AccountGrant>;
   /** May add mailboxes (people always; agents when allowed on their page). */
@@ -126,7 +126,8 @@ export class PolicyService {
 
   /** Resolve an agent's API key to its access, or null if invalid/revoked/expired. */
   async forApiKey(rawKey: string): Promise<Access | null> {
-    if (!rawKey.startsWith("mmcp_")) return null;
+    // cmcp_ keys; mmcp_ keys were issued before the rename and keep working.
+    if (!rawKey.startsWith("cmcp_") && !rawKey.startsWith("mmcp_")) return null;
     const now = new Date();
     const [row] = await this.db
       .select({ keyId: apiKeys.id, agent: agents })
@@ -246,6 +247,6 @@ export class PolicyService {
 
 /** Create a new API key: returns the raw key (show once) plus what to store. */
 export function newApiKey() {
-  const raw = `mmcp_${randomBytes(32).toString("base64url")}`;
+  const raw = `cmcp_${randomBytes(32).toString("base64url")}`;
   return { raw, prefix: raw.slice(0, 12), hash: sha256(raw) };
 }

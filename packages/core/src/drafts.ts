@@ -1,4 +1,4 @@
-import { accountDrafts, agents, and, type Db, desc, eq, sql } from "@mailmcp/db";
+import { accountDrafts, agents, and, type Db, desc, eq, sql } from "@cloud-mail-mcp/db";
 import type { AccountService } from "./accounts";
 import { AccountError } from "./accounts";
 import type { AgentService } from "./agents";

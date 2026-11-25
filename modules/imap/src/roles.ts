@@ -1,4 +1,4 @@
-import type { FolderRole, RemoteFolder } from "@mailmcp/module-sdk";
+import type { FolderRole, RemoteFolder } from "@cloud-mail-mcp/module-sdk";
 
 /** Fallback role detection for servers without SPECIAL-USE (common on older cPanel). */
 const NAME_ROLES: Array<[FolderRole, RegExp, RegExp]> = [

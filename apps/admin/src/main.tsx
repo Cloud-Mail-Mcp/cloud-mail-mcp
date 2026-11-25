@@ -41,7 +41,8 @@ function App() {
   });
 
   if (setup.isLoading || (setup.data?.hasUsers && me.isLoading)) return <Spinner />;
-  if (setup.error) return <p className="p-8 text-red-600">Can't reach the MailMCP server.</p>;
+  if (setup.error)
+    return <p className="p-8 text-red-600">Can't reach the Cloud Mail MCP server.</p>;
   // Brand-new server: setup wizard starts by creating the owner account.
   if (setup.data && !setup.data.hasUsers) return <SetupWizard key="owner" hasUsers={false} />;
   // Not signed in, or the session expired/was revoked.

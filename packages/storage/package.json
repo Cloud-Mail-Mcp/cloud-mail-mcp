@@ -1,5 +1,5 @@
 {
-  "name": "@mailmcp/storage",
+  "name": "@cloud-mail-mcp/storage",
   "version": "0.0.0",
   "private": true,
   "type": "module",

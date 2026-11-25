@@ -1,4 +1,4 @@
-import { type SQL, sql } from "@mailmcp/db";
+import { type SQL, sql } from "@cloud-mail-mcp/db";
 
 export type SortField = "date" | "from" | "subject";
 export type SortOrder = "asc" | "desc";

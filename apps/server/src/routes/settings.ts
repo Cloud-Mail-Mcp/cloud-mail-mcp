@@ -1,5 +1,5 @@
-import { type SettingKey, settingDefs } from "@mailmcp/core";
-import { blobStoreFromConfig, testBlobStore } from "@mailmcp/storage";
+import { type SettingKey, settingDefs } from "@cloud-mail-mcp/core";
+import { blobStoreFromConfig, testBlobStore } from "@cloud-mail-mcp/storage";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";

@@ -34,7 +34,7 @@ function AuthFrame({
 export function OwnerForm() {
   const qc = useQueryClient();
   const [f, setF] = useState({
-    orgName: "My MailMCP",
+    orgName: "My Cloud Mail MCP",
     name: "",
     email: "",
     password: "",
@@ -143,7 +143,7 @@ export function LoginPage() {
   };
 
   return (
-    <AuthFrame title="Sign in to MailMCP" subtitle="Admin panel">
+    <AuthFrame title="Sign in to Cloud Mail MCP" subtitle="Admin panel">
       <form onSubmit={submit} className="space-y-4">
         {err && <Alert tone="error" title={err} />}
         <Field label="Email" htmlFor="email">

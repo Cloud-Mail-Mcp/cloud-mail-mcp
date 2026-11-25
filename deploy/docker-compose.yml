@@ -13,7 +13,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://mailmcp:mailmcp@postgres:5432/mailmcp
-      # Plain-HTTP local use. Put MailMCP behind HTTPS (Caddy, Traefik, nginx) and remove this
+      # Plain-HTTP local use. Put Cloud Mail MCP behind HTTPS (Caddy, Traefik, nginx) and remove this
       # line before exposing it to the internet.
       SECURE_COOKIES: "false"
     ports:

@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { join } from "node:path";
-import { runtime } from "@mailmcp/core";
+import { runtime } from "@cloud-mail-mcp/core";
 import postgres from "postgres";
 
 /**
@@ -80,11 +80,13 @@ export async function testDatabase(url: string): Promise<{ version: string }> {
       SELECT current_setting('server_version_num')::int AS num, current_setting('server_version') AS ver`;
     if (!row || row.num < 130000)
       throw Object.assign(
-        new Error(`PostgreSQL ${row?.ver ?? "?"} is too old; MailMCP needs version 13 or newer.`),
+        new Error(
+          `PostgreSQL ${row?.ver ?? "?"} is too old; Cloud Mail MCP needs version 13 or newer.`,
+        ),
         { friendly: true },
       );
-    await sql`CREATE TABLE IF NOT EXISTS mailmcp_install_probe (id int)`;
-    await sql`DROP TABLE IF EXISTS mailmcp_install_probe`;
+    await sql`CREATE TABLE IF NOT EXISTS cloud_mail_mcp_install_probe (id int)`;
+    await sql`DROP TABLE IF EXISTS cloud_mail_mcp_install_probe`;
     return { version: row.ver };
   } catch (err) {
     if ((err as { friendly?: boolean }).friendly) throw err;
@@ -133,7 +135,7 @@ export async function runInstaller(opts: { host: string; port: number }): Promis
   console.warn(
     [
       "",
-      "  MailMCP needs a database. Open this site in your browser to connect one.",
+      "  Cloud Mail MCP needs a database. Open this site in your browser to connect one.",
       `  Setup code: ${code}`,
       `  (also saved in ${codeFile})`,
       "",
@@ -164,7 +166,7 @@ export async function runInstaller(opts: { host: string; port: number }): Promis
           }
           return send(res, 403, {
             error:
-              "That setup code isn't right. Find it in mailmcp-data/setup-code.txt or the app log.",
+              "That setup code isn't right. Find it in cloud-mail-mcp-data/setup-code.txt or the app log.",
           });
         }
         let url: string;
@@ -178,7 +180,7 @@ export async function runInstaller(opts: { host: string; port: number }): Promis
         // Save, then switch to the real app in this same process.
         await writeFile(
           runtime.configFile,
-          `# Saved by the MailMCP installer. Keep this file private.\nDATABASE_URL=${JSON.stringify(url)}\n`,
+          `# Saved by the Cloud Mail MCP installer. Keep this file private.\nDATABASE_URL=${JSON.stringify(url)}\n`,
           { mode: 0o600 },
         );
         await chmod(runtime.configFile, 0o600);
@@ -206,7 +208,7 @@ export async function runInstaller(opts: { host: string; port: number }): Promis
 
 const PAGE = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Connect a database · MailMCP</title>
+<title>Connect a database · Cloud Mail MCP</title>
 <style>
 :root{color-scheme:light dark;--bg:#fafafa;--card:#fff;--text:#18181b;--muted:#71717a;--border:#d4d4d8;--accent:#2563eb;--err-bg:#fef2f2;--err:#991b1b;--ok-bg:#f0fdf4;--ok:#166534}
 @media (prefers-color-scheme:dark){:root{--bg:#09090b;--card:#18181b;--text:#f4f4f5;--muted:#a1a1aa;--border:#3f3f46;--err-bg:#450a0a;--err:#fecaca;--ok-bg:#052e16;--ok:#bbf7d0}}
@@ -226,11 +228,11 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}bu
 .toggle{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13.5px}
 code{font-family:ui-monospace,Menlo,monospace;font-size:13px}
 </style></head><body><main>
-<div class="logo"><div class="mark" aria-hidden="true">M</div><div><h1>Connect a database</h1><p class="sub">Step 1 of setup. MailMCP stores its index and settings in PostgreSQL.</p></div></div>
+<div class="logo"><div class="mark" aria-hidden="true">M</div><div><h1>Connect a database</h1><p class="sub">Step 1 of setup. Cloud Mail MCP stores its index and settings in PostgreSQL.</p></div></div>
 <form class="card" id="f" novalidate>
 <label for="code">Setup code</label>
 <input id="code" name="code" autocomplete="off" required placeholder="XXXX-XXXX" autocapitalize="characters">
-<div class="hint">In your hosting file manager, open <code>mailmcp-data/setup-code.txt</code> (or check the app's log).</div>
+<div class="hint">In your hosting file manager, open <code>cloud-mail-mcp-data/setup-code.txt</code> (or check the app's log).</div>
 </form>
 <form class="card" id="db" novalidate>
 <div id="parts">
@@ -259,9 +261,9 @@ async function go(path){$("test").disabled=$("save").disabled=true;show("ok","Co
 try{const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:body()});const j=await r.json().catch(()=>({}));
 if(!r.ok){show("err",j.error||"Something went wrong.");return false;}
 if(path.endsWith("test")){show("ok","Connected to PostgreSQL "+j.version+". Everything looks good.");return true;}
-show("ok","Saved. Starting MailMCP…");
+show("ok","Saved. Starting Cloud Mail MCP…");
 for(let i=0;i<90;i++){await new Promise(r=>setTimeout(r,1000));try{const h=await fetch("/healthz",{cache:"no-store"});if(h.ok){location.href="/admin/";return true;}}catch(e){}}
-show("err","MailMCP is taking a while to start. Refresh this page in a minute.");return true;
+show("err","Cloud Mail MCP is taking a while to start. Refresh this page in a minute.");return true;
 }catch(e){show("err","Couldn't reach the server.");return false;}finally{$("test").disabled=$("save").disabled=false;}}
 $("test").onclick=()=>go("/install/test");$("db").onsubmit=(e)=>{e.preventDefault();go("/install/save");};
 </script></body></html>`;

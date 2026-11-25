@@ -1,7 +1,7 @@
 /**
  * End-to-end OAuth for MCP clients, driven by the MCP SDK's own OAuth client (the same discovery,
  * dynamic registration and PKCE flow Claude, ChatGPT and Claude Code use).
- * Needs Postgres only (docker compose up -d).  pnpm --filter @mailmcp/server test
+ * Needs Postgres only (docker compose up -d).  pnpm --filter @cloud-mail-mcp/server test
  */
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -9,8 +9,8 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createDb, eq, memberships, orgs, users } from "@mailmcp/db";
-import { prepareTestDatabase } from "@mailmcp/db/testing";
+import { createDb, eq, memberships, orgs, users } from "@cloud-mail-mcp/db";
+import { prepareTestDatabase } from "@cloud-mail-mcp/db/testing";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -147,7 +147,11 @@ before(async () => {
   const d = createDb(testUrl);
   const built = await buildApp({
     db: d.db,
-    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "mailmcp-oauth-e2e") },
+    config: {
+      ...config,
+      databaseUrl: testUrl,
+      dataDir: join(tmpdir(), "cloud-mail-mcp-oauth-e2e"),
+    },
     masterKey: Buffer.alloc(32, 9),
     masterKeyInfo: { source: "env" },
     logger: false,
@@ -223,7 +227,7 @@ test("SDK client: register, sign in, approve, then use MCP; refresh rotates; rev
   });
   const client = new Client({ name: "oauth-e2e", version: "1" });
   await assert.rejects(client.connect(transport), UnauthorizedError);
-  assert.ok(provider.info?.client_id.startsWith("mmcp_client_"), "registered dynamically");
+  assert.ok(provider.info?.client_id.startsWith("cmcp_client_"), "registered dynamically");
   assert.ok(provider.authUrl, "sent the user to authorize");
   assert.equal(provider.authUrl.searchParams.get("code_challenge_method"), "S256");
   assert.equal(provider.authUrl.searchParams.get("resource"), `${base}/mcp`);
@@ -231,8 +235,8 @@ test("SDK client: register, sign in, approve, then use MCP; refresh rotates; rev
   const code = await approveInBrowser(provider.authUrl);
   await transport.finishAuth(code);
   const t1 = provider.saved as OAuthTokens;
-  assert.match(t1.access_token, /^mmcp_at_/);
-  assert.match(t1.refresh_token ?? "", /^mmcp_rt_/);
+  assert.match(t1.access_token, /^cmcp_at_/);
+  assert.match(t1.refresh_token ?? "", /^cmcp_rt_/);
 
   const client2 = new Client({ name: "oauth-e2e", version: "1" });
   await client2.connect(

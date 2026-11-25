@@ -1,6 +1,6 @@
 /**
  * Dev only: fill a GreenMail test mailbox with realistic mail via IMAP APPEND.
- *   pnpm --filter @mailmcp/worker seed -- --count 3000
+ *   pnpm --filter @cloud-mail-mcp/worker seed -- --count 3000
  * Defaults target the docker-compose GreenMail (alice@example.test).
  */
 import { ImapFlow } from "imapflow";

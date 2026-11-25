@@ -1,6 +1,6 @@
-# MailMCP — one image for server + worker.
-#   docker build -t mailmcp .
-#   docker run -e DATABASE_URL=postgres://... -v mailmcp-data:/data -p 8787:8787 mailmcp
+# Cloud Mail MCP — one image for server + worker.
+#   docker build -t cloud-mail-mcp .
+#   docker run -e DATABASE_URL=postgres://... -v cloud-mail-mcp-data:/data -p 8787:8787 cloud-mail-mcp
 FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
@@ -19,16 +19,16 @@ COPY packages/storage/package.json packages/storage/
 COPY modules/imap/package.json modules/imap/
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm --filter @mailmcp/admin build
+RUN pnpm --filter @cloud-mail-mcp/admin build
 
 FROM base AS runtime
 # Set by the release workflow so a running install knows its version and where updates come from.
-ARG MAILMCP_VERSION=""
-ARG MAILMCP_REVISION=""
-ARG MAILMCP_REPO=""
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 MAILMCP_DATA_DIR=/data MAILMCP_INSTALL=docker \
-    MAILMCP_VERSION=$MAILMCP_VERSION MAILMCP_REVISION=$MAILMCP_REVISION MAILMCP_REPO=$MAILMCP_REPO
-LABEL org.opencontainers.image.title="MailMCP" \
+ARG CLOUD_MAIL_MCP_VERSION=""
+ARG CLOUD_MAIL_MCP_REVISION=""
+ARG CLOUD_MAIL_MCP_REPO=""
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 CLOUD_MAIL_MCP_DATA_DIR=/data CLOUD_MAIL_MCP_INSTALL=docker \
+    CLOUD_MAIL_MCP_VERSION=$CLOUD_MAIL_MCP_VERSION CLOUD_MAIL_MCP_REVISION=$CLOUD_MAIL_MCP_REVISION CLOUD_MAIL_MCP_REPO=$CLOUD_MAIL_MCP_REPO
+LABEL org.opencontainers.image.title="Cloud Mail MCP" \
       org.opencontainers.image.description="Self-hosted email server for AI agents (MCP)" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY --from=build /app /app

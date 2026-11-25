@@ -1,8 +1,8 @@
 /** Dev: run one sync for an account (or all) in the foreground and print timings. */
-import { createServices, loadOrCreateMasterKey, runtime } from "@mailmcp/core";
-import { accounts, createDb } from "@mailmcp/db";
-import imapModule from "@mailmcp/module-imap";
-import type { ModuleManifest } from "@mailmcp/module-sdk";
+import { createServices, loadOrCreateMasterKey, runtime } from "@cloud-mail-mcp/core";
+import { accounts, createDb } from "@cloud-mail-mcp/db";
+import imapModule from "@cloud-mail-mcp/module-imap";
+import type { ModuleManifest } from "@cloud-mail-mcp/module-sdk";
 
 const { key } = await loadOrCreateMasterKey(runtime.dataDir);
 const databaseUrl = runtime.databaseUrl as string;

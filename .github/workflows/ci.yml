@@ -51,7 +51,7 @@ jobs:
         env:
           LOG_LEVEL: error
       - name: Build admin panel
-        run: pnpm --filter @mailmcp/admin build
+        run: pnpm --filter @cloud-mail-mcp/admin build
 
   docker:
     runs-on: ubuntu-latest

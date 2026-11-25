@@ -1,5 +1,5 @@
-import { accounts, and, type Db, desc, eq, inArray, migrations, or, sql } from "@mailmcp/db";
-import type { Connector, InventoryItem, RemoteFolder } from "@mailmcp/module-sdk";
+import { accounts, and, type Db, desc, eq, inArray, migrations, or, sql } from "@cloud-mail-mcp/db";
+import type { Connector, InventoryItem, RemoteFolder } from "@cloud-mail-mcp/module-sdk";
 import type { AccountRow, AccountService } from "./accounts";
 import { audit } from "./audit";
 import { friendlyError } from "./errors";
@@ -292,7 +292,7 @@ export class MigrationService {
 
   /**
    * Forget passes that were running when the process stopped (call once when the worker
-   * starts; MailMCP runs one worker).
+   * starts; Cloud Mail MCP runs one worker).
    */
   async releaseAll() {
     await this.db.update(migrations).set({ running: false }).where(eq(migrations.running, true));
@@ -475,7 +475,7 @@ export class MigrationService {
         ...(finishedNow && !m.continuous ? { status: "finished" } : {}),
       })
       .where(eq(migrations.id, id));
-    // Show copied mail in MailMCP soon.
+    // Show copied mail in Cloud Mail MCP soon.
     if (copied) {
       await this.jobs
         .enqueueSync({ accountId: m.toAccountId, reason: "migration" })

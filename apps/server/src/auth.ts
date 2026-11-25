@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { and, type Db, eq, gt, memberships, sessions, users } from "@mailmcp/db";
+import { and, type Db, eq, gt, memberships, sessions, users } from "@cloud-mail-mcp/db";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 const scryptAsync = promisify(scrypt) as (
@@ -35,7 +35,11 @@ export async function verifyPassword(pw: string, stored: string): Promise<boolea
   return timingSafeEqual(actual, expected);
 }
 
-export const SESSION_COOKIE = "mailmcp_session";
+export const SESSION_COOKIE = "cloud_mail_mcp_session";
+/** The cookie's name before the rename; still accepted so nobody is signed out by the update. */
+export const OLD_SESSION_COOKIE = "mailmcp_session";
+export const sessionToken = (cookies: Record<string, string | undefined>) =>
+  cookies[SESSION_COOKIE] ?? cookies[OLD_SESSION_COOKIE];
 const SESSION_DAYS = 14;
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -93,7 +97,7 @@ declare module "fastify" {
 
 export function requireUser(db: Db) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const user = await userFromSession(db, req.cookies[SESSION_COOKIE]);
+    const user = await userFromSession(db, sessionToken(req.cookies));
     if (!user) return reply.code(401).send({ error: "Not signed in" });
     req.user = user;
   };

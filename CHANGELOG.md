@@ -1,6 +1,6 @@
 # Changelog
 
-What's new in each MailMCP version. New entries go under **Unreleased**; `pnpm release X.Y.Z`
+What's new in each Cloud Mail MCP version. New entries go under **Unreleased**; `pnpm release X.Y.Z`
 turns that section into the new version, and it becomes the GitHub release notes that the admin
 panel shows under Settings → Updates.
 
@@ -11,9 +11,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 **Highlights**
 
+- **MailMCP is now Cloud Mail MCP.** New name everywhere: the app, docs, Docker image
+  (`ghcr.io/cloud-mail-mcp/cloud-mail-mcp`) and repository
+  (`github.com/Cloud-Mail-Mcp/cloud-mail-mcp`). Existing installs keep working without changes
+  (see "Renamed to Cloud Mail MCP" below).
+
 - **Connect Claude, ChatGPT and other AI apps by signing in**: no API keys to copy, and you
   choose each app's mailboxes and permissions.
-- **Chat with Claude inside MailMCP**, with the same permissions and approvals as your agents.
+- **Chat with Claude inside Cloud Mail MCP**, with the same permissions and approvals as your agents.
 - **Move to a new mail host**: copy every folder between accounts and keep them in sync until
   your DNS switches over.
 - **Add many mailboxes at once** from an Excel or CSV file, or let an AI agent add them for you
@@ -26,11 +31,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   folding account lists.
 - **Install on shared hosting**: Enhance, cPanel, Easypanel, Coolify, CapRover and Dokploy.
 
+### Renamed to Cloud Mail MCP
+
+- The product, admin panel, docs, MCP server name and installer now say Cloud Mail MCP. In MCP
+  client setups the server is called `cloud-mail-mcp` (e.g. `claude mcp add --transport http
+  cloud-mail-mcp https://…/mcp`).
+- Docker image `ghcr.io/cloud-mail-mcp/cloud-mail-mcp`; the old image name keeps receiving
+  updates, so Docker installs update as before. Re-running the installer switches an existing
+  install to the new image.
+- Settings are now named `CLOUD_MAIL_MCP_*`. The old `MAILMCP_*` names still work.
+- New API keys start with `cmcp_`. Keys and app sign-ins created before (`mmcp_…`) keep working.
+- The Node.js bundle is `cloud-mail-mcp-node-<version>.zip`, with its data in
+  `~/cloud-mail-mcp-data`. Existing installs keep using `~/mailmcp-data`.
+- New installs go in a `cloud-mail-mcp/` folder. Internal names that hold data (the Docker
+  Compose project, volumes and database) stay as they were so nothing has to be moved.
+
 ### Connect AI apps by signing in
 
 - Paste your server's `/mcp` URL into Claude (Settings → Connectors → Add custom connector),
   ChatGPT (developer mode connectors), Claude Code, Cursor or VS Code. The app sends you to a
-  MailMCP page where you choose which mailboxes it can use and what it may do in each. No API key
+  Cloud Mail MCP page where you choose which mailboxes it can use and what it may do in each. No API key
   to copy.
 - Connected apps appear under Agents with a "signed in" badge. Disabling or removing one cuts it
   off immediately.
@@ -39,7 +59,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Agents page shows your MCP URL with step-by-step instructions for each app. API keys still
   work for apps that can't sign in.
 
-### Chat with Claude inside MailMCP
+### Chat with Claude inside Cloud Mail MCP
 
 - New **Chat** page. Add your own Anthropic API key under Settings → Assistant to turn it on
   (it's off without one).
@@ -147,7 +167,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   banner when an account can't log in.
 - Settings are tested before saving. If the server is briefly unreachable you can **save without
   testing**.
-- After a change, MailMCP syncs straight away and the new-mail listener reconnects with the new
+- After a change, Cloud Mail MCP syncs straight away and the new-mail listener reconnects with the new
   settings (it used to stay on the old server).
 - **Accounts** moved down the menu, next to Settings.
 - The Accounts list sorts by name, domain (new column), status, messages or unread: click a
@@ -190,5 +210,5 @@ First release.
 - Install with Docker Compose (optional automatic HTTPS) or from source. In-app update checks and
   one-click updates for Docker installs; forks publish and update from their own repository.
 
-[Unreleased]: https://github.com/Cloud-Mail-Mcp/mailmcp/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Cloud-Mail-Mcp/mailmcp/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/tag/v0.1.0

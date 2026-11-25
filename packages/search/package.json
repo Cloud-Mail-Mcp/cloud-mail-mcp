@@ -1,5 +1,5 @@
 {
-  "name": "@mailmcp/search",
+  "name": "@cloud-mail-mcp/search",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,6 +11,6 @@
     "test": "node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@mailmcp/db": "workspace:*"
+    "@cloud-mail-mcp/db": "workspace:*"
   }
 }

@@ -60,8 +60,8 @@ function WaitingForPassword() {
       }
     >
       <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-        These mailboxes were added without a password. Enter each one here; MailMCP tests it and
-        adds the mailbox. Passwords typed here are never shown to agents.
+        These mailboxes were added without a password. Enter each one here; Cloud Mail MCP tests it
+        and adds the mailbox. Passwords typed here are never shown to agents.
       </p>
       <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
         {drafts.map((d) => (
@@ -171,7 +171,7 @@ function DraftRow({ draft: d }: { draft: AccountDraft }) {
 
 type SortKey = "name" | "domain" | "status" | "messages" | "unread";
 type Sort = { key: SortKey; dir: "asc" | "desc" };
-const SORT_STORE = "mailmcp.accountsSort";
+const SORT_STORE = "cloud-mail-mcp.accountsSort";
 const nameOf = (a: AccountSummary) => (a.displayName || a.address).toLowerCase();
 const domainOf = (a: AccountSummary) => a.address.split("@")[1]?.toLowerCase() ?? "";
 
@@ -274,7 +274,7 @@ export function AccountsPage() {
         description={
           accounts.length
             ? `${accounts.length} connected · ${fmt(totals.messages)} messages · ${fmt(totals.unread)} unread in inboxes`
-            : "Connect the mailboxes MailMCP should index and make available to agents."
+            : "Connect the mailboxes Cloud Mail MCP should index and make available to agents."
         }
         actions={
           <>
@@ -805,8 +805,8 @@ export function AccountDetailPage({ id }: { id: string }) {
             tone="error"
             title={
               account.status === "auth_error"
-                ? "MailMCP can't log in to this mailbox"
-                : "MailMCP can't reach this mailbox"
+                ? "Cloud Mail MCP can't log in to this mailbox"
+                : "Cloud Mail MCP can't reach this mailbox"
             }
           >
             If the password changed or the mail server moved,{" "}
@@ -872,8 +872,8 @@ export function AccountDetailPage({ id }: { id: string }) {
 
         <Card title="Login & server settings" className="scroll-mt-6">
           <p id="connection" className="-mt-1 mb-4 scroll-mt-6 text-sm text-zinc-500">
-            Changed your password, or did the mail server's address change? Update it here. MailMCP
-            logs in with the new settings before saving them.
+            Changed your password, or did the mail server's address change? Update it here. Cloud
+            Mail MCP logs in with the new settings before saving them.
           </p>
           {preset?.steps?.length ? (
             <div className="mb-5">
@@ -963,8 +963,8 @@ export function AccountDetailPage({ id }: { id: string }) {
 
         <Card title="Remove account" className="border-red-200 dark:border-red-900/60">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Removes this mailbox from MailMCP, including its local index and stored copies. Mail on
-            the server is not touched.
+            Removes this mailbox from Cloud Mail MCP, including its local index and stored copies.
+            Mail on the server is not touched.
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <Field label={`Type ${account.address} to confirm`} htmlFor="del">

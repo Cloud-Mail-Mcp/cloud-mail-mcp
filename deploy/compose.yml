@@ -1,4 +1,4 @@
-# MailMCP — production stack.
+# Cloud Mail MCP — production stack.
 #
 # Installed by install.sh, which writes the matching .env next to this file. By hand:
 #   1. put this file and an .env (see deploy/.env.production.example) in a folder
@@ -6,6 +6,10 @@
 #
 # Services:
 #   mailmcp   the app (admin panel + MCP endpoint + sync worker) — runs migrations on start
+#
+# The internal names here (project "mailmcp", its service, volumes and database) date from before
+# the product was called Cloud Mail MCP. They stay the same so existing installs keep their data
+# when this file is upgraded. Settings named MAILMCP_* in an older .env still work.
 #   postgres  database
 #   updater   applies updates when you click "Update now" in Settings (or daily with AUTO_UPDATE)
 #   caddy     automatic HTTPS for DOMAIN (enable with COMPOSE_PROFILES=https)
@@ -13,20 +17,20 @@ name: mailmcp
 
 services:
   mailmcp:
-    image: ${MAILMCP_IMAGE:?set MAILMCP_IMAGE in .env}:${MAILMCP_TAG:-latest}
+    image: ${CLOUD_MAIL_MCP_IMAGE:-${MAILMCP_IMAGE:?set CLOUD_MAIL_MCP_IMAGE in .env}}:${CLOUD_MAIL_MCP_TAG:-${MAILMCP_TAG:-latest}}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://mailmcp:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/mailmcp
-      MAILMCP_TAG: ${MAILMCP_TAG:-latest}
-      MAILMCP_INSTALL: compose
-      MAILMCP_CONTROL_DIR: /control
+      CLOUD_MAIL_MCP_TAG: ${CLOUD_MAIL_MCP_TAG:-${MAILMCP_TAG:-latest}}
+      CLOUD_MAIL_MCP_INSTALL: compose
+      CLOUD_MAIL_MCP_CONTROL_DIR: /control
       SECURE_COOKIES: ${SECURE_COOKIES:-true}
       TRUST_PROXY: ${TRUST_PROXY:-false}
     ports:
-      - "${MAILMCP_BIND:-127.0.0.1:8787}:8787"
+      - "${CLOUD_MAIL_MCP_BIND:-${MAILMCP_BIND:-127.0.0.1:8787}}:8787"
     volumes:
       # /data/master.key encrypts saved passwords and stored mail. BACK IT UP:
       #   docker compose cp mailmcp:/data/master.key ./master.key.backup
@@ -78,11 +82,13 @@ services:
             rm -f $$C/update-request.json
             say() { printf '{"id":"%s","state":"%s","message":"%s","at":"%s"}' "$$id" "$$1" "$$2" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > $$C/update-status.json; echo "[updater] $$1 $$2"; }
             if [ -n "$$tag" ]; then
-              if grep -q '^MAILMCP_TAG=' $$P/.env; then sed -i "s/^MAILMCP_TAG=.*/MAILMCP_TAG=$$tag/" $$P/.env; else echo "MAILMCP_TAG=$$tag" >> $$P/.env; fi
+              if grep -q '^CLOUD_MAIL_MCP_TAG=' $$P/.env; then sed -i "s/^CLOUD_MAIL_MCP_TAG=.*/CLOUD_MAIL_MCP_TAG=$$tag/" $$P/.env;
+              elif grep -q '^MAILMCP_TAG=' $$P/.env; then sed -i "s/^MAILMCP_TAG=.*/MAILMCP_TAG=$$tag/" $$P/.env;
+              else echo "CLOUD_MAIL_MCP_TAG=$$tag" >> $$P/.env; fi
             fi
             say pulling "Downloading the new version"
             if docker compose -f $$P/compose.yml --project-directory $$P pull mailmcp > /tmp/u.log 2>&1; then
-              say restarting "Restarting MailMCP"
+              say restarting "Restarting Cloud Mail MCP"
               if docker compose -f $$P/compose.yml --project-directory $$P up -d --no-deps mailmcp >> /tmp/u.log 2>&1; then
                 say done "Update applied"
               else

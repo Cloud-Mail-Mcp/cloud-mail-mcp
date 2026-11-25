@@ -1,4 +1,4 @@
-import { defineModule, MODULE_API_VERSION } from "@mailmcp/module-sdk";
+import { defineModule, MODULE_API_VERSION } from "@cloud-mail-mcp/module-sdk";
 import { imapConfigSchema } from "./config";
 import { ImapConnector } from "./connector";
 import { presets } from "./presets";

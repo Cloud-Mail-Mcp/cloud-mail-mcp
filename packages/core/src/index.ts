@@ -1,3 +1,5 @@
+import "./env-compat";
+
 export * from "./accounts";
 export * from "./agents";
 export * from "./approvals";

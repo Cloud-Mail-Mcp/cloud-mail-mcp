@@ -1,4 +1,4 @@
-import { type Db, pgArray, type SQL, sql } from "@mailmcp/db";
+import { type Db, pgArray, type SQL, sql } from "@cloud-mail-mcp/db";
 import type { ParsedQuery } from "./query";
 import {
   DEFAULT_SORT,

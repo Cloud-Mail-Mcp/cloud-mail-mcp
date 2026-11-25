@@ -1,5 +1,5 @@
 /**
- * MailMCP database schema. Design rules (see docs/SPEC.md §4 / §4a):
+ * Cloud Mail MCP database schema. Design rules (see docs/SPEC.md §4 / §4a):
  *  - One shared table per entity (NOT one table per mailbox).
  *  - Every hot mail table's primary key and indexes lead with `account_id`.
  *  - Mail bodies / raw MIME / attachments live in the blob store, not here.
@@ -324,7 +324,7 @@ export const apiKeys = pgTable(
     agentId: uuid("agent_id")
       .notNull()
       .references(() => agents.id, { onDelete: "cascade" }),
-    prefix: text("prefix").notNull(), // first chars shown in UI, e.g. "mmcp_a1b2"
+    prefix: text("prefix").notNull(), // first chars shown in UI, e.g. "cmcp_a1b2"
     keyHash: text("key_hash").notNull(), // sha256 hex
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),

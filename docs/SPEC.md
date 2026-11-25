@@ -1,4 +1,4 @@
-# MailMCP — Product & Architecture Spec
+# Cloud Mail MCP — Product & Architecture Spec
 
 Status: **v0.1 implemented** · Spec date: 2026-11-17 · Updated: 2026-11-20
 
@@ -21,15 +21,15 @@ Status: **v0.1 implemented** · Spec date: 2026-11-17 · Updated: 2026-11-20
 
 ## 1. What we're building
 
-MailMCP is a self-hostable server that connects many email accounts, keeps a searchable local index of their mail, and exposes it to AI agents over the Model Context Protocol (MCP) with fine-grained, per-account permissions. It ships with an admin panel for viewing mail, connecting accounts, registering agents and setting permissions.
+Cloud Mail MCP is a self-hostable server that connects many email accounts, keeps a searchable local index of their mail, and exposes it to AI agents over the Model Context Protocol (MCP) with fine-grained, per-account permissions. It ships with an admin panel for viewing mail, connecting accounts, registering agents and setting permissions.
 
 Three ways to use it:
 
-| Mode                    | Who                                             | How                                                                                                                                                     |
-| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Self-hosted**         | Individuals, companies, agencies                | `docker compose up` on their own server. Free (AGPL-3.0).                                                                                               |
-| **Embedded**            | Developers building their own AI agents or SaaS | Run MailMCP beside their app and talk to it via MCP, the REST API, or the TypeScript SDK. Closed-source products embedding it buy a commercial license. |
-| **Hosted (commercial)** | Non-technical users and teams                   | Our cloud. Managed Google/Microsoft OAuth, billing, teams, premium modules, and later a Superhuman-style web client.                                    |
+| Mode                    | Who                                             | How                                                                                                                                                            |
+| ----------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Self-hosted**         | Individuals, companies, agencies                | `docker compose up` on their own server. Free (AGPL-3.0).                                                                                                      |
+| **Embedded**            | Developers building their own AI agents or SaaS | Run Cloud Mail MCP beside their app and talk to it via MCP, the REST API, or the TypeScript SDK. Closed-source products embedding it buy a commercial license. |
+| **Hosted (commercial)** | Non-technical users and teams                   | Our cloud. Managed Google/Microsoft OAuth, billing, teams, premium modules, and later a Superhuman-style web client.                                           |
 
 ### Goals
 
@@ -49,7 +49,7 @@ Three ways to use it:
 ## 2. Licensing & business model
 
 - **Core: AGPL-3.0.** Anyone can self-host and modify it. Anyone who offers a modified version as a network service must publish their changes.
-- **Commercial license**, for companies that want to embed MailMCP in a closed-source product or host it without the AGPL obligations. Sold by us.
+- **Commercial license**, for companies that want to embed Cloud Mail MCP in a closed-source product or host it without the AGPL obligations. Sold by us.
 - **CLA required** for outside contributors, so we keep the right to dual-license.
 - **Module exception:** the AGPL core includes a _linking exception for modules_ that use only the public Module API (§5). That lets us and third parties ship closed-source paid modules (e.g. Zoho) without forcing them open.
 - Paid modules and hosted-only features live in `ee/` (source-available, commercial license) or in a private repo.
@@ -231,8 +231,8 @@ The **module context (`ctx`)** gives a module only what it needs: decrypted cred
 
 ### 5.3 Loading & distribution
 
-- Modules are npm packages (`@mailmcp/module-*`, or a third-party scope) or signed tarballs from our module registry.
-- They are installed from the admin panel (**Modules** page) or the CLI (`mailmcp module add zoho-mail`).
+- Modules are npm packages (`@cloud-mail-mcp/module-*`, or a third-party scope) or signed tarballs from our module registry.
+- They are installed from the admin panel (**Modules** page) or the CLI (`cloud-mail-mcp module add zoho-mail`).
 - v1 runs modules in-process. Later: isolated worker threads with a capability-scoped RPC boundary for third-party modules.
 - `packages/module-sdk` ships a **conformance test suite**. A module has to pass it to be listed in the registry.
 
@@ -288,7 +288,7 @@ Default is **deny**: an agent sees nothing until it has a **grant** on an accoun
 
 ## 7. MCP interface
 
-- **Transport:** Streamable HTTP at `/mcp`, targeting the current MCP spec via the official TypeScript SDK. A stdio shim (`npx @mailmcp/cli connect`) bridges to remote servers for clients that only speak stdio.
+- **Transport:** Streamable HTTP at `/mcp`, targeting the current MCP spec via the official TypeScript SDK. A stdio shim (`npx @cloud-mail-mcp/cli connect`) bridges to remote servers for clients that only speak stdio.
 - **Auth:** OAuth 2.1 + PKCE + Dynamic Client Registration (for Claude, ChatGPT and other OAuth-capable clients) **or** a bearer API key. On the OAuth consent screen the user picks which accounts and scopes to grant.
 
 ### v0.1 tool set (≈20)
@@ -304,7 +304,7 @@ Default is **deny**: an agent sees nothing until it has a **grant** on an accoun
 | Folders  | `create_folder`, `rename_folder`, `delete_folder`                                               |
 | Status   | `get_pending_action` (agent checks whether a held send was approved)                            |
 
-- **Resources:** `mailmcp://accounts`, `mailmcp://account/{id}/unread`.
+- **Resources:** `cloud-mail-mcp://accounts`, `cloud-mail-mcp://account/{id}/unread`.
 - **Prompts:** `triage_inbox`, `summarize_thread`, `draft_reply`.
 
 **Search syntax.** One query language across providers, compiled to SQL against the index: `from:alice subject:"invoice" has:attachment after:2026-01-01 in:inbox is:unread`, with optional `semantic: true` for pgvector search.
@@ -371,9 +371,9 @@ interface SearchIndex {
 ## 9. Security
 
 - **Configuration lives in the database, not `.env`.** `.env` only says how to reach Postgres. Mail accounts, storage (including S3 credentials) and sync settings are managed in the admin panel and stored in `accounts` / `app_settings`, with secrets encrypted.
-- **Credentials:** AES-256-GCM envelope encryption. Each account has a data key, encrypted by the master key. The master key is **never stored in the database** (a DB dump alone must not decrypt anything). It comes from `data/master.key`, auto-generated with mode 600 on first start, or from `MAILMCP_MASTER_KEY` (env, for Docker secrets) or a KMS on hosted. The admin panel shows a warning to back up the key file. Keys can be rotated.
+- **Credentials:** AES-256-GCM envelope encryption. Each account has a data key, encrypted by the master key. The master key is **never stored in the database** (a DB dump alone must not decrypt anything). It comes from `data/master.key`, auto-generated with mode 600 on first start, or from `CLOUD_MAIL_MCP_MASTER_KEY` (env, for Docker secrets) or a KMS on hosted. The admin panel shows a warning to back up the key file. Keys can be rotated.
 - **Admin auth:** argon2id passwords, TOTP MFA, secure session cookies. OIDC/SAML SSO is an `ee` feature.
-- **API keys:** random 32 bytes with a recognizable prefix (`mmcp_…`), stored as a sha256 hash and shown once.
+- **API keys:** random 32 bytes with a recognizable prefix (`cmcp_…`; keys from before the rename start with `mmcp_` and still work), stored as a sha256 hash and shown once.
 - **Mail viewer:** HTML is sanitized (DOMPurify) and rendered in a sandboxed iframe. Remote images are blocked by default and proxied when allowed.
 - **Network:** bind to localhost unless a public URL is configured, Host-header allowlist, CORS locked to the admin origin, rate limiting on auth endpoints.
 - **Data at rest:** blobs (bodies, raw MIME, attachments) are encrypted client-side before they reach disk or S3 (§8a). Postgres holds headers and snippets, so docs recommend disk/volume encryption there. "Metadata-only" mode skips storing bodies. Note that the search index holds body text: OpenSearch should run with encryption at rest and stay on a private network.
@@ -398,7 +398,7 @@ interface SearchIndex {
 ## 11. Embedding (for developers)
 
 - **REST API** `/api/v1`: the same operations as the MCP tools plus admin operations (create account, create agent, set grants), documented with OpenAPI.
-- **`@mailmcp/sdk`:** a typed TypeScript client. Typical embed flow: the host app creates an org per customer → starts an account connection (hosted OAuth URL returned) → creates an agent + grant → hands the agent's MCP URL/key to its AI.
+- **`@cloud-mail-mcp/sdk`:** a typed TypeScript client. Typical embed flow: the host app creates an org per customer → starts an account connection (hosted OAuth URL returned) → creates an agent + grant → hands the agent's MCP URL/key to its AI.
 - **Webhooks:** `message.received`, `account.status_changed`, `action.pending`, signed with HMAC.
 - **White-label OAuth:** embedders can supply their own Google/Microsoft OAuth app credentials per org.
 
@@ -430,7 +430,7 @@ interface SearchIndex {
 ## 14. Open questions
 
 1. ~~Module pricing~~: **resolved.** If modules are ever sold, it's a one-time purchase. They may stay free; the decision is deferred.
-2. **Product name / domain:** "MailMCP" is the working name. Check trademark and domain before any public launch.
+2. **Product name / domain:** "Cloud Mail MCP" is the working name. Check trademark and domain before any public launch.
 3. **Embedding provider default** for semantic search: none (opt-in), a local model, or an API?
 4. **Hosted data policy:** mcpemails stores no mail; we index it. That means a privacy policy and data processing agreement (DPA), and possibly a per-account "no local index" option for hosted users.
 5. **Repository hosting:** a public GitHub org for the core + a private repo for `ee/`, or one repo with `ee/` source-available?

@@ -1,4 +1,4 @@
-import { ALL_SCOPES, SCOPES } from "@mailmcp/core";
+import { ALL_SCOPES, SCOPES } from "@cloud-mail-mcp/core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";

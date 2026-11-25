@@ -11,7 +11,7 @@ import {
   isNull,
   max,
   oauthTokens,
-} from "@mailmcp/db";
+} from "@cloud-mail-mcp/db";
 import { audit } from "./audit";
 import { MailError } from "./mail";
 import { newApiKey } from "./policy";

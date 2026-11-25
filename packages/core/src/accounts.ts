@@ -8,14 +8,14 @@ import {
   messageAddresses,
   notInArray,
   sql,
-} from "@mailmcp/db";
+} from "@cloud-mail-mcp/db";
 import type {
   Connector,
   Logger,
   ModuleContext,
   ModuleManifest,
   RemoteFolder,
-} from "@mailmcp/module-sdk";
+} from "@cloud-mail-mcp/module-sdk";
 import { audit } from "./audit";
 import { decryptJson, encryptJson, newDataKey, unwrapDataKey } from "./crypto";
 import { friendlyError } from "./errors";

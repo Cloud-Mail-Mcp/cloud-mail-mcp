@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { loadOrCreateMasterKey } from "./masterkey";
 
 test("concurrent first starts agree on one key (no EEXIST crash)", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "mailmcp-key-"));
+  const dir = await mkdtemp(join(tmpdir(), "cloud-mail-mcp-key-"));
   try {
     const results = await Promise.all(
       Array.from({ length: 8 }, () => loadOrCreateMasterKey(dir, {})),
@@ -31,8 +31,10 @@ test("concurrent first starts agree on one key (no EEXIST crash)", async () => {
 test("env key wins and is validated", async () => {
   const k = Buffer.alloc(32, 1).toString("base64");
   assert.equal(
-    (await loadOrCreateMasterKey("/nonexistent", { MAILMCP_MASTER_KEY: k })).source,
+    (await loadOrCreateMasterKey("/nonexistent", { CLOUD_MAIL_MCP_MASTER_KEY: k })).source,
     "env",
   );
-  await assert.rejects(loadOrCreateMasterKey("/nonexistent", { MAILMCP_MASTER_KEY: "c2hvcnQ=" }));
+  await assert.rejects(
+    loadOrCreateMasterKey("/nonexistent", { CLOUD_MAIL_MCP_MASTER_KEY: "c2hvcnQ=" }),
+  );
 });

@@ -1,5 +1,5 @@
-import { GRANT_PRESETS, type GrantPreset, OAUTH_SCOPE, OAuthError } from "@mailmcp/core";
-import { accounts, eq } from "@mailmcp/db";
+import { GRANT_PRESETS, type GrantPreset, OAUTH_SCOPE, OAuthError } from "@cloud-mail-mcp/core";
+import { accounts, eq } from "@cloud-mail-mcp/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";
@@ -25,7 +25,7 @@ export const CORS_PATHS = [/^\/\.well-known\//, /^\/oauth\/(token|register|revok
 
 function sendOAuthError(reply: FastifyReply, err: unknown) {
   if (err instanceof OAuthError) {
-    if (err.status === 401) reply.header("www-authenticate", 'Basic realm="mailmcp"');
+    if (err.status === 401) reply.header("www-authenticate", 'Basic realm="cloud-mail-mcp"');
     return reply.code(err.status).send({ error: err.error, error_description: err.description });
   }
   throw err;
@@ -37,7 +37,7 @@ function errorPage(reply: FastifyReply, status: number, message: string) {
   return reply
     .code(status)
     .type("text/html; charset=utf-8")
-    .send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Can't connect · MailMCP</title>
+    .send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Can't connect · Cloud Mail MCP</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;background:#f6f7f9;color:#111;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}
 main{max-width:440px;background:#fff;border:1px solid #e3e5e8;border-radius:12px;padding:28px}h1{font-size:20px;margin:0 0 8px}p{margin:0;color:#444}
 @media(prefers-color-scheme:dark){body{background:#0f1115;color:#eee}main{background:#181b21;border-color:#2a2e36}p{color:#bbb}}</style></head>
@@ -77,8 +77,8 @@ export async function oauthRoutes(app: FastifyInstance, d: AppDeps) {
       authorization_servers: [base],
       scopes_supported: [OAUTH_SCOPE],
       bearer_methods_supported: ["header"],
-      resource_name: "MailMCP",
-      resource_documentation: "https://github.com/Cloud-Mail-Mcp/mailmcp",
+      resource_name: "Cloud Mail MCP",
+      resource_documentation: "https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp",
     };
   };
   app.get("/.well-known/oauth-protected-resource", protectedResource);

@@ -40,8 +40,8 @@ export function blobStoreFromConfig(cfg: StorageConfig, dataDir: string): BlobSt
 
 /** Write, read back and delete a probe object. */
 export async function testBlobStore(store: BlobStore): Promise<void> {
-  const key = `_mailmcp_probe/${Date.now()}`;
-  const data = Buffer.from("mailmcp storage probe");
+  const key = `_cloud_mail_mcp_probe/${Date.now()}`;
+  const data = Buffer.from("cloud-mail-mcp storage probe");
   await store.put(key, data);
   const back = await store.get(key);
   await store.delete(key);

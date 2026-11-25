@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { accounts, and, eq, folders, ne, sql } from "@mailmcp/db";
-import type { RemoteFolder } from "@mailmcp/module-sdk";
+import { accounts, and, eq, folders, ne, sql } from "@cloud-mail-mcp/db";
+import type { RemoteFolder } from "@cloud-mail-mcp/module-sdk";
 import { QUEUES, type SyncJob } from "./jobs";
 import { createLogger } from "./logger";
 import { MailService } from "./mail";

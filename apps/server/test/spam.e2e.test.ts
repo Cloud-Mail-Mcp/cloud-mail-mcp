@@ -9,8 +9,8 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createDb, eq, memberships, orgs, users } from "@mailmcp/db";
-import { prepareTestDatabase } from "@mailmcp/db/testing";
+import { createDb, eq, memberships, orgs, users } from "@cloud-mail-mcp/db";
+import { prepareTestDatabase } from "@cloud-mail-mcp/db/testing";
 import { ImapFlow } from "imapflow";
 import { type AppDeps, buildApp } from "../src/app";
 import { hashPassword } from "../src/auth";
@@ -162,7 +162,7 @@ before(async () => {
   const d = createDb(testUrl);
   const built = await buildApp({
     db: d.db,
-    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "mailmcp-e2e-spam") },
+    config: { ...config, databaseUrl: testUrl, dataDir: join(tmpdir(), "cloud-mail-mcp-e2e-spam") },
     masterKey: Buffer.alloc(32, 9),
     masterKeyInfo: { source: "env" },
     logger: false,

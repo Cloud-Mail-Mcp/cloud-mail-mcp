@@ -275,7 +275,7 @@ export function SystemCard() {
         <dt className="text-zinc-500">Encryption key</dt>
         <dd className="break-all text-zinc-800 dark:text-zinc-200">
           {masterKey.source === "env" ? (
-            "From MAILMCP_MASTER_KEY environment variable"
+            "From CLOUD_MAIL_MCP_MASTER_KEY environment variable"
           ) : (
             <span className="font-mono text-xs">{masterKey.path}</span>
           )}
@@ -332,8 +332,8 @@ export function GeneralCard({ onSaved, saveLabel = "Save" }: CardProps = {}) {
         />
         {insecure && (
           <Alert tone="warning" title="Use HTTPS for anything beyond this computer">
-            API keys and mail travel over this connection. Put MailMCP behind HTTPS (the Docker
-            install can do it automatically with a domain name).
+            API keys and mail travel over this connection. Put Cloud Mail MCP behind HTTPS (the
+            Docker install can do it automatically with a domain name).
           </Alert>
         )}
         {s.err && (
@@ -648,7 +648,7 @@ export function UpdatesCard() {
             {updating ? (
               <Alert tone="info" title="Updating…">
                 {d.updater.status?.message ??
-                  "Downloading the new version. MailMCP restarts automatically and this page reloads when it's back."}
+                  "Downloading the new version. Cloud Mail MCP restarts automatically and this page reloads when it's back."}
               </Alert>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -698,7 +698,7 @@ function ManualUpdate({
   onWebhookUpdate: () => void;
   updating: boolean;
 }) {
-  const repo = info.repo || "Cloud-Mail-Mcp/mailmcp";
+  const repo = info.repo || "Cloud-Mail-Mcp/cloud-mail-mcp";
   const hook = useSetting("updates");
   const pre = "overflow-x-auto rounded-md bg-zinc-900 p-3 text-xs text-zinc-100";
   return (
@@ -709,10 +709,10 @@ function ManualUpdate({
             This copy runs as the Node.js bundle. If your host deploys it from GitHub (for example
             Enhance <em>GitHub deploy</em>), track the <code>dist</code> branch for stable releases
             or <code>dist-edge</code> for every change, with auto-deploy on. New versions then
-            install themselves, and MailMCP restarts onto them within a minute.
+            install themselves, and Cloud Mail MCP restarts onto them within a minute.
           </p>
           <p>
-            Otherwise, download the newest <code>mailmcp-node</code> zip from{" "}
+            Otherwise, download the newest <code>cloud-mail-mcp-node</code> zip from{" "}
             <a
               className="text-blue-600 hover:underline"
               href={`https://github.com/${repo}/releases/latest`}
@@ -722,7 +722,7 @@ function ManualUpdate({
               Releases
             </a>{" "}
             and replace the app folder, then restart the app. Your data in{" "}
-            <code>~/mailmcp-data</code> is kept.
+            <code>~/cloud-mail-mcp-data</code> is kept.
           </p>
         </>
       )}

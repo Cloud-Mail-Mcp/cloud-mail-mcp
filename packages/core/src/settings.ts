@@ -1,4 +1,4 @@
-import { appSettings, type Db, eq } from "@mailmcp/db";
+import { appSettings, type Db, eq } from "@cloud-mail-mcp/db";
 import { z } from "zod";
 import { audit } from "./audit";
 import { decryptJson, encryptJson } from "./crypto";
@@ -13,7 +13,7 @@ import { DEFAULT_TAGS, SorterTagSchema } from "./sorter-tags";
 export const settingDefs = {
   general: {
     schema: z.object({
-      instanceName: z.string().trim().max(100).default("MailMCP"),
+      instanceName: z.string().trim().max(100).default("Cloud Mail MCP"),
       /** How AI clients reach this server (used in connection instructions). Empty = browser origin. */
       publicUrl: z
         .string()
@@ -25,7 +25,7 @@ export const settingDefs = {
         )
         .transform((v) => v.replace(/\/+$/, ""))
         .default(""),
-      /** Ask GitHub for new versions (the only outbound call MailMCP makes on its own). */
+      /** Ask GitHub for new versions (the only outbound call Cloud Mail MCP makes on its own). */
       checkForUpdates: z.boolean().default(true),
     }),
     secretFields: [],

@@ -1,4 +1,4 @@
-import { runtime } from "@mailmcp/core";
+import { runtime } from "@cloud-mail-mcp/core";
 
 /** `--port 3000` / `--host 0.0.0.0` on the command line override the environment (for panels without env vars). */
 const arg = (name: string) => {

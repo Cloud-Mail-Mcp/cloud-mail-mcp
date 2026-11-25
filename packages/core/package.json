@@ -1,5 +1,5 @@
 {
-  "name": "@mailmcp/core",
+  "name": "@cloud-mail-mcp/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",
-    "@mailmcp/db": "workspace:*",
-    "@mailmcp/module-sdk": "workspace:*",
-    "@mailmcp/search": "workspace:*",
-    "@mailmcp/storage": "workspace:*",
+    "@cloud-mail-mcp/db": "workspace:*",
+    "@cloud-mail-mcp/module-sdk": "workspace:*",
+    "@cloud-mail-mcp/search": "workspace:*",
+    "@cloud-mail-mcp/storage": "workspace:*",
     "mailparser": "^3.14.5",
     "pg-boss": "^12.38.2",
     "zod": "^4.6.7"

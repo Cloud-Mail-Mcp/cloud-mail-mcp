@@ -1,5 +1,5 @@
-import { MailError } from "@mailmcp/core";
-import { parseSort } from "@mailmcp/search";
+import { MailError } from "@cloud-mail-mcp/core";
+import { parseSort } from "@cloud-mail-mcp/search";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";

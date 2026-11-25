@@ -1,7 +1,7 @@
 /**
  * Integration test: sync engine against the GreenMail dev server (docker compose --profile testmail).
  * Skips automatically if GreenMail or Postgres isn't reachable.
- *   pnpm --filter @mailmcp/worker test
+ *   pnpm --filter @cloud-mail-mcp/worker test
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -9,12 +9,21 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { createServices, runtime, type Services } from "@mailmcp/core";
-import { and, count, createDb, eq, folders, messageFolders, messages, orgs } from "@mailmcp/db";
-import { prepareTestDatabase } from "@mailmcp/db/testing";
-import imapModule from "@mailmcp/module-imap";
-import type { ModuleManifest } from "@mailmcp/module-sdk";
-import { parseQuery } from "@mailmcp/search";
+import { createServices, runtime, type Services } from "@cloud-mail-mcp/core";
+import {
+  and,
+  count,
+  createDb,
+  eq,
+  folders,
+  messageFolders,
+  messages,
+  orgs,
+} from "@cloud-mail-mcp/db";
+import { prepareTestDatabase } from "@cloud-mail-mcp/db/testing";
+import imapModule from "@cloud-mail-mcp/module-imap";
+import type { ModuleManifest } from "@cloud-mail-mcp/module-sdk";
+import { parseQuery } from "@cloud-mail-mcp/search";
 import { ImapFlow } from "imapflow";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
 
@@ -88,7 +97,7 @@ before(async () => {
     db: d.db,
     masterKey: Buffer.alloc(32, 7),
     modules: [imapModule as unknown as ModuleManifest],
-    dataDir: join(tmpdir(), "mailmcp-itest"),
+    dataDir: join(tmpdir(), "cloud-mail-mcp-itest"),
     databaseUrl: testUrl,
   });
   imap = new ImapFlow({

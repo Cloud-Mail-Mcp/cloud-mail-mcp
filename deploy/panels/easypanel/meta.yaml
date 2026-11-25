@@ -1,6 +1,6 @@
-# Template for https://github.com/easypanel-io/templates (copy this folder to templates/mailmcp/).
+# Template for https://github.com/easypanel-io/templates (copy this folder to templates/cloud-mail-mcp/).
 # Easypanel asks for pinned image versions: bump appServiceImage on each release.
-name: MailMCP
+name: Cloud Mail MCP
 description:
   Self-hosted email server for AI agents. Connect your mailboxes, index them locally, and give
   Claude or your own AI permissioned access over MCP, with send approvals and an audit log.
@@ -12,11 +12,11 @@ changeLog:
     description: first release
 links:
   - label: GitHub
-    url: https://github.com/Cloud-Mail-Mcp/mailmcp
+    url: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp
   - label: Documentation
-    url: https://github.com/Cloud-Mail-Mcp/mailmcp/tree/main/docs/install
+    url: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/tree/main/docs/install
 contributors:
-  - name: MailMCP contributors
+  - name: Cloud Mail MCP contributors
     url: https://github.com/Cloud-Mail-Mcp
 schema:
   type: object
@@ -28,15 +28,15 @@ schema:
     appServiceName:
       type: string
       title: App Service Name
-      default: mailmcp
+      default: cloud-mail-mcp
     appServiceImage:
       type: string
       title: App Service Image
-      default: ghcr.io/cloud-mail-mcp/mailmcp:0.1.0
+      default: ghcr.io/cloud-mail-mcp/cloud-mail-mcp:0.1.0
     databaseServiceName:
       type: string
       title: Database Service Name
-      default: mailmcp-db
+      default: cloud-mail-mcp-db
 benefits:
   - title: Your mail, your server
     description: Mail is indexed and stored encrypted on your own infrastructure.

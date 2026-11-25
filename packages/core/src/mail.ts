@@ -12,8 +12,13 @@ import {
   senderRules,
   sorterExamples,
   sql,
-} from "@mailmcp/db";
-import type { EmailAddress, MessageRef, OutboundMessage, RemoteFolder } from "@mailmcp/module-sdk";
+} from "@cloud-mail-mcp/db";
+import type {
+  EmailAddress,
+  MessageRef,
+  OutboundMessage,
+  RemoteFolder,
+} from "@cloud-mail-mcp/module-sdk";
 import {
   DEFAULT_SORT,
   decodeCursor,
@@ -23,7 +28,7 @@ import {
   parseQuery,
   type Sort,
   sortKey,
-} from "@mailmcp/search";
+} from "@cloud-mail-mcp/search";
 import type { AccountRow } from "./accounts";
 import { audit } from "./audit";
 import { type MessageChecks, parseChecks } from "./checks";
@@ -90,7 +95,7 @@ export interface MessageDetail extends MessageSummary {
     method: UnsubscribeMethod;
     /** The sender's unsubscribe web page, when there is one. Untrusted. */
     website: string | null;
-    /** When it was unsubscribed through MailMCP. */
+    /** When it was unsubscribed through Cloud Mail MCP. */
     unsubscribedAt: string | null;
   } | null;
   /** Sender checks and spam score from the receiving mail server (null: it didn't say). */
@@ -1092,7 +1097,7 @@ export class MailService {
       if (!opts.approved) {
         if (!access.grants.get(accountId)?.scopes.has("mail:send"))
           throw new AccessDenied(
-            "This list only takes unsubscribe requests by email, which needs permission to send from this account. The user can unsubscribe from the MailMCP Mail page.",
+            "This list only takes unsubscribe requests by email, which needs permission to send from this account. The user can unsubscribe from the Cloud Mail MCP Mail page.",
           );
         const gated = await this.gateSend(
           access,
@@ -1179,7 +1184,7 @@ export class MailService {
       return {
         status: "pending_approval",
         pendingId: p!.id,
-        note: "A person must approve this message in the MailMCP admin panel before it is sent. Check with get_pending_action.",
+        note: "A person must approve this message in the Cloud Mail MCP admin panel before it is sent. Check with get_pending_action.",
       };
     }
     return null;

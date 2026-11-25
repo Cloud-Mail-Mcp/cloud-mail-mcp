@@ -4,7 +4,7 @@ import type {
   MessageEnvelope,
   MessageFlags,
   RemoteFolder,
-} from "@mailmcp/module-sdk";
+} from "@cloud-mail-mcp/module-sdk";
 import type {
   FetchMessageObject,
   FetchQueryObject,

@@ -1,4 +1,4 @@
-import type { Connector } from "@mailmcp/module-sdk";
+import type { Connector } from "@cloud-mail-mcp/module-sdk";
 import type { AccountService } from "./accounts";
 import { createLogger } from "./logger";
 

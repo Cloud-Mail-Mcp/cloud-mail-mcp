@@ -1,7 +1,7 @@
 {
-  "name": "@mailmcp/module-sdk",
+  "name": "@cloud-mail-mcp/module-sdk",
   "version": "0.0.0",
-  "description": "Module API for MailMCP connector modules.",
+  "description": "Module API for Cloud Mail MCP connector modules.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

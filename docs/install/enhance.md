@@ -1,6 +1,6 @@
-# Install MailMCP on Enhance
+# Install Cloud Mail MCP on Enhance
 
-This uses Enhance's **GitHub deploy** and **Node.js** features. Enhance deploys the ready-to-run `dist` branch of the MailMCP repository, so there is no build step, and new releases deploy automatically.
+This uses Enhance's **GitHub deploy** and **Node.js** features. Enhance deploys the ready-to-run `dist` branch of the Cloud Mail MCP repository, so there is no build step, and new releases deploy automatically.
 
 > **Status:** this flow was tested in a local simulation of Enhance's folder layout (`~/deploys/<id>` + `deploys/current`). If any panel label below differs on your Enhance version, please open an issue.
 
@@ -19,7 +19,7 @@ In the website's **Databases** section, create a **PostgreSQL** database and a u
 ## 2. Deploy from GitHub
 
 1. Open the website → **GitHub** and connect your GitHub account if asked.
-2. Repository: **`Cloud-Mail-Mcp/mailmcp`**
+2. Repository: **`Cloud-Mail-Mcp/cloud-mail-mcp`**
 3. Branch:
    - **`dist`** for stable releases (recommended), or
    - **`dist-edge`** to get every change as soon as it's merged.
@@ -47,7 +47,7 @@ Click **Launch**. The **Startup command field is required**; if it's empty, noth
 ## 4. Connect the database and finish setup
 
 1. Open your website. You'll see **Connect a database**.
-2. **Setup code:** in **File Manager**, open `mailmcp-data/setup-code.txt` in the website's home folder (it's also in the app log, `persistent_app_*.log`).
+2. **Setup code:** in **File Manager**, open `cloud-mail-mcp-data/setup-code.txt` in the website's home folder (it's also in the app log, `persistent_app_*.log`).
 3. Enter the PostgreSQL details from step 1. Use **SSL: Off** if the database runs on your Enhance cluster. Click **Test connection**, then **Save and continue**.
 4. The **setup wizard** opens: create your admin login, then:
    - **Server:** set the public URL to `https://your-domain`;
@@ -57,28 +57,28 @@ Click **Launch**. The **Startup command field is required**; if it's empty, noth
 
 ## 5. Back up your encryption key
 
-In **File Manager**, download **`mailmcp-data/master.key`** and keep it somewhere safe, separate from database backups. Without it, saved mail passwords and stored mail can't be decrypted.
+In **File Manager**, download **`cloud-mail-mcp-data/master.key`** and keep it somewhere safe, separate from database backups. Without it, saved mail passwords and stored mail can't be decrypted.
 
 ## Updates
 
-With auto deploy on, publishing a new release updates the `dist` branch. Enhance deploys it, and within about a minute MailMCP notices the new `deploys/current` and restarts onto it. Database changes apply automatically on start. Your data in `~/mailmcp-data` is never touched by deploys.
+With auto deploy on, publishing a new release updates the `dist` branch. Enhance deploys it, and within about a minute Cloud Mail MCP notices the new `deploys/current` and restarts onto it. Database changes apply automatically on start. Your data in `~/cloud-mail-mcp-data` is never touched by deploys.
 
 ## Where things are
 
 | Path (in the website's home folder) | What                                           |
 | ----------------------------------- | ---------------------------------------------- |
 | `deploys/current/`                  | The running version (replaced on every deploy) |
-| `mailmcp-data/master.key`           | Encryption key. **Back it up.**                |
-| `mailmcp-data/config.env`           | Saved database connection (private)            |
-| `mailmcp-data/blobs/`               | Stored mail (if using this server's disk)      |
+| `cloud-mail-mcp-data/master.key`    | Encryption key. **Back it up.**                |
+| `cloud-mail-mcp-data/config.env`    | Saved database connection (private)            |
+| `cloud-mail-mcp-data/blobs/`        | Stored mail (if using this server's disk)      |
 | `persistent_app_*.log`              | App log                                        |
 
 ## Troubleshooting
 
-- **"MailMCP needs Node.js 22.15 or newer"** in the log: choose a newer Node version in the Node.js app settings.
+- **"Cloud Mail MCP needs Node.js 22.15 or newer"** in the log: choose a newer Node version in the Node.js app settings.
 - **"Port 3000 is already in use"**: choose another port in Enhance and use the same number in `--port`.
 - **404 from LiteSpeed (the site serves files like `/README.md` but `/` is a 404):** the worker process isn't running. Launch it (step 3), and check that the startup command isn't empty.
 - **502 / site unreachable:** make sure the port in the worker process matches the app's port (3000 by default).
-- **Can't stay signed in:** open the site over `https://` (MailMCP marks login cookies secure when it listens on `0.0.0.0`).
+- **Can't stay signed in:** open the site over `https://` (Cloud Mail MCP marks login cookies secure when it listens on `0.0.0.0`).
 - **The site still shows Enhance's default page:** check that the Node.js app proxies the whole website and its startup mode is Automatic.
 - **Forgot the setup code:** restart the worker process in Enhance; a new code is written each time the installer starts.

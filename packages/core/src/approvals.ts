@@ -1,4 +1,4 @@
-import { accounts, agents, and, type Db, desc, eq, pendingActions } from "@mailmcp/db";
+import { accounts, agents, and, type Db, desc, eq, pendingActions } from "@cloud-mail-mcp/db";
 import { audit } from "./audit";
 import { deserializeCompose, MailError, type MailService } from "./mail";
 import type { Access, PolicyService } from "./policy";
