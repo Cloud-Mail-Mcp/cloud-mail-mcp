@@ -314,6 +314,13 @@ test("import: a mailbox that fails its test can be added anyway, as not working"
   assert.equal(acct.status, "error");
   assert.match(acct.statusMessage, /Added without a working login/);
   assert.ok(acct.settings.failedAt, "remembered when it failed");
+  // A failing sync is in the mailbox's connection log, with the details.
+  await deps.sync.syncAccount(r.accountId).catch(() => {});
+  const { events } = await api("GET", `/accounts/${r.accountId}/events`);
+  const failed = events.find((e: { level: string }) => e.level === "error");
+  assert.equal(failed.kind, "sync");
+  assert.match(failed.message, /Sync failed: The server refused the connection/);
+  assert.equal(failed.detail.code, "CONN_REFUSED");
 
   // Updating an existing mailbox with settings that fail: saved anyway when asked, marked not working.
   const upd = await api("POST", "/accounts/bulk", {

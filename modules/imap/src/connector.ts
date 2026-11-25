@@ -551,32 +551,55 @@ export class ImapConnector implements Connector {
     let client: ImapFlow | undefined;
     let timer: NodeJS.Timeout | undefined;
     let backoff = 5_000;
+    // Only one (re)connect loop at a time. Before, a failed attempt's "close" event started a
+    // second loop next to the retrying one, so connections multiplied until the server's
+    // per-user connection limit refused everything (including syncs).
+    let connecting = false;
     const fire = () => {
       clearTimeout(timer);
       timer = setTimeout(onChange, 2_000);
     };
     const connect = async () => {
-      while (!stopped) {
-        try {
-          client = this.newClient();
-          client.on("exists", fire);
-          client.on("expunge", fire);
-          client.on("flags", fire);
-          client.on("close", () => {
-            if (!stopped) setTimeout(connect, backoff);
-          });
-          await client.connect();
-          await client.mailboxOpen(folder.remoteId, { readOnly: true });
-          backoff = 5_000;
-          return; // imapflow IDLEs automatically while no command is running
-        } catch (err) {
-          this.ctx.log.warn("idle connect failed", { err: (err as Error).message });
-          await new Promise((r) => setTimeout(r, backoff));
-          backoff = Math.min(backoff * 2, 5 * 60_000);
+      if (connecting || stopped) return;
+      connecting = true;
+      try {
+        while (!stopped) {
+          const c = this.newClient();
+          try {
+            c.on("exists", fire);
+            c.on("expunge", fire);
+            c.on("flags", fire);
+            await c.connect();
+            await c.mailboxOpen(folder.remoteId, { readOnly: true });
+            client = c;
+            backoff = 5_000;
+            // Dropped later (server restart, network): reconnect once, after a pause.
+            c.once("close", () => {
+              if (stopped || client !== c) return;
+              this.ctx.log.warn("new-mail connection closed; reconnecting", {});
+              client = undefined;
+              setTimeout(() => void connect(), backoff);
+            });
+            return; // imapflow IDLEs automatically while no command is running
+          } catch (err) {
+            c.removeAllListeners();
+            c.close();
+            const e = err as { responseText?: string };
+            this.ctx.log.warn("new-mail connection failed", {
+              err: [(err as Error).message, e.responseText].filter(Boolean).join(" — "),
+              retryInSeconds: backoff / 1000,
+            });
+            await new Promise((r) => setTimeout(r, backoff));
+            backoff = Math.min(backoff * 2, 5 * 60_000);
+          }
         }
+      } finally {
+        connecting = false;
       }
     };
-    await connect();
+    // Connect in the background: a server that's down must not hold up the caller, which would
+    // otherwise try again (and stack up connections) before this attempt gives up.
+    void connect();
     return async () => {
       stopped = true;
       clearTimeout(timer);

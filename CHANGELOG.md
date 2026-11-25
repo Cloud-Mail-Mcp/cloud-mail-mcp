@@ -165,6 +165,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Accounts
 
+- **Connection log** on each account's page: syncs that changed something, the always-on
+  new-mail connection, login changes and every error, with what the mail server said and the
+  command it refused. Filter to problems only, or copy it to share.
+- Fixed: a mailbox whose new-mail connection kept failing (e.g. a server that refuses it for a
+  while) opened more and more connections, a new retry loop every minute, until the mail server's
+  per-user connection limit refused everything, so syncs failed even though the connection test
+  passed. There is now one retry loop per mailbox, with growing pauses, and none for a mailbox
+  whose password was rejected.
 - **Import from spreadsheet** (Accounts page): upload an Excel (.xlsx) or CSV file of mailboxes.
   Columns like Email, Password, Name, Label, Username and IMAP/SMTP server are recognised; only
   Email is required (servers are guessed: Gmail, iCloud, otherwise mail.yourdomain). Rows with a

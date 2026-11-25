@@ -672,3 +672,23 @@ export const aiUsage = pgTable(
   },
   (t) => [primaryKey({ columns: [t.day, t.feature, t.model] })],
 );
+
+/**
+ * Per-mailbox connection log: syncs, the new-mail (IDLE) connection, logins and server errors,
+ * with the server's own words. The newest few hundred per mailbox are kept.
+ */
+export const accountEvents = pgTable(
+  "account_events",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    level: text("level").notNull(), // info | warn | error
+    kind: text("kind").notNull(), // sync | idle | login | folders | send
+    message: text("message").notNull(),
+    detail: jsonb("detail"),
+  },
+  (t) => [index("account_events_account_idx").on(t.accountId, t.id.desc())],
+);

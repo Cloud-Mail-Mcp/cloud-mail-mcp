@@ -16,6 +16,7 @@ import type {
   ModuleManifest,
   RemoteFolder,
 } from "@cloud-mail-mcp/module-sdk";
+import { errorEvent, recordAccountEvent } from "./account-events";
 import { audit } from "./audit";
 import { decryptJson, encryptJson, newDataKey, unwrapDataKey } from "./crypto";
 import { friendlyError } from "./errors";
@@ -396,9 +397,21 @@ export class AccountService {
           probe = await this.probe(manifest, row.address, config);
         } catch (err) {
           const f = friendlyError(err);
+          await recordAccountEvent(
+            this.db,
+            id,
+            errorEvent("login", "New login settings failed the test", err),
+          );
           throw new AccountError(f.message, 422, { code: f.code, hint: f.hint });
         }
       }
+      await recordAccountEvent(this.db, id, {
+        level: "info",
+        kind: "login",
+        message: probe
+          ? "Login and server settings changed; the test passed."
+          : "Login and server settings changed without testing.",
+      });
       const dataKey = unwrapDataKey(this.master, row.dataKeyEnc, row.id);
       patch.credentialsEnc = encryptJson(dataKey, config, row.id);
       if (row.status !== "disabled") {
@@ -438,6 +451,7 @@ export class AccountService {
       await this.upsertFolders(this.db, id, remote);
     } catch (err) {
       const f = friendlyError(err);
+      await recordAccountEvent(this.db, id, errorEvent("folders", "Couldn't list folders", err));
       await this.db
         .update(accounts)
         .set({

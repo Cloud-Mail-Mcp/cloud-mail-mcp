@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { ConnectionLog } from "../components/ConnectionLog";
 import { SchemaFields } from "../components/SchemaFields";
 import {
   Alert,
@@ -960,6 +961,8 @@ export function AccountDetailPage({ id }: { id: string }) {
             </div>
           </form>
         </Card>
+
+        <ConnectionLog accountId={account.id} />
 
         <Card title="Remove account" className="border-red-200 dark:border-red-900/60">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">

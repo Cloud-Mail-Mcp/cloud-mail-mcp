@@ -1,3 +1,4 @@
+import { listAccountEvents } from "@cloud-mail-mcp/core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppDeps } from "../app";
@@ -121,6 +122,19 @@ export async function accountRoutes(
       await jobs.enqueueSync({ accountId: id, reason: "settings" }).catch(() => {});
     }
     return { account };
+  });
+
+  /** The mailbox's connection log, newest first (page back with ?before=<id>). */
+  app.get("/api/v1/accounts/:id/events", { preHandler: auth }, async (req) => {
+    const { id } = IdParams.parse(req.params);
+    const q = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(300).optional(),
+        before: z.coerce.number().int().optional(),
+      })
+      .parse(req.query);
+    await accounts.row(req.user.orgId, id);
+    return { events: await listAccountEvents(db, id, q) };
   });
 
   app.post("/api/v1/accounts/:id/refresh-folders", { preHandler: admin }, async (req) => {

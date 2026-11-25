@@ -28,6 +28,7 @@ import {
 } from "@cloud-mail-mcp/module-sdk";
 import type { MailDoc, SearchIndex } from "@cloud-mail-mcp/search";
 import { blobKeys } from "@cloud-mail-mcp/storage";
+import { errorEvent, recordAccountEvent } from "./account-events";
 import type { AccountRow, AccountService } from "./accounts";
 import type { BlobService } from "./blobs";
 import { parseChecks } from "./checks";
@@ -388,6 +389,15 @@ export class SyncService {
           : `${total.toLocaleString()} messages indexed.`;
       await this.setStatus(accountId, "ok", note, { lastSyncAt: new Date() });
       log.info("sync done", { ...result, ms: Date.now() - started });
+      // Connection log: syncs that changed something, and the first one after a problem.
+      const recovered = row.status === "error" || row.status === "auth_error";
+      if (result.upserts || result.removed || recovered || !row.lastSyncAt)
+        await recordAccountEvent(db, accountId, {
+          level: "info",
+          kind: "sync",
+          message: `${recovered ? "Connected again. " : ""}Synced: ${result.upserts} new or changed, ${result.removed} removed, ${result.bodies} bodies downloaded (${((Date.now() - started) / 1000).toFixed(1)}s).`,
+          detail: { ...result, ms: Date.now() - started, full: !!opts.fullReconcile },
+        });
       return result;
     } catch (err) {
       const f = friendlyError(err);
@@ -410,6 +420,7 @@ export class SyncService {
         );
       }
       log.error("sync failed", { err: (err as Error).message, code: f.code });
+      await recordAccountEvent(db, accountId, errorEvent("sync", "Sync failed", err));
       throw err;
     } finally {
       clearInterval(heartbeat);

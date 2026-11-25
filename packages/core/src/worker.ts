@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { accounts, and, eq, folders, ne, sql } from "@cloud-mail-mcp/db";
 import type { RemoteFolder } from "@cloud-mail-mcp/module-sdk";
+import { accountEventLogger, errorEvent, recordAccountEvent } from "./account-events";
 import { QUEUES, type SyncJob } from "./jobs";
 import { createLogger } from "./logger";
 import { MailService } from "./mail";
@@ -135,7 +136,12 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
       .from(accounts)
       .innerJoin(folders, and(eq(folders.accountId, accounts.id), eq(folders.role, "inbox")))
       .where(ne(accounts.status, "disabled"));
-    const wanted = new Map(rows.map((r) => [r.account.id, fingerprint(r.account)]));
+    // Not for mailboxes whose login was rejected: retrying would only add failed logins.
+    const wanted = new Map(
+      rows
+        .filter((r) => r.account.status !== "auth_error")
+        .map((r) => [r.account.id, fingerprint(r.account)]),
+    );
     for (const [id, w] of watchers) {
       // Gone, or its password/server changed: stop watching with the old settings.
       if (wanted.get(id) !== w.settings) {
@@ -149,7 +155,12 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
         const connector = await svc.accounts.connectorFor(
           account,
           undefined,
-          log.child({ accountId: account.id, idle: true }),
+          accountEventLogger(
+            db,
+            account.id,
+            log.child({ accountId: account.id, idle: true }),
+            "idle",
+          ),
         );
         if (!connector.watch) continue;
         const remote: RemoteFolder = {
@@ -174,19 +185,31 @@ export async function startWorker(svc: Services, opts: { embedded?: boolean } = 
           accountId: account.id,
           err: (err as Error).message,
         });
+        await recordAccountEvent(
+          db,
+          account.id,
+          errorEvent("idle", "Couldn't start the new-mail connection", err),
+        );
       }
     }
   }
 
+  let refreshing = false;
   const tick = async () => {
     await scheduleDue().catch((e) => log.error("schedule failed", { err: (e as Error).message }));
     await migrations
       .due(MIGRATE_EVERY_MS)
       .then((ids) => Promise.all(ids.map((id) => jobs.enqueueMigration(id))))
       .catch((e) => log.error("migration schedule failed", { err: (e as Error).message }));
-    await refreshWatchers().catch((e) =>
-      log.error("watchers failed", { err: (e as Error).message }),
-    );
+    // One refresh at a time: a slow one must not overlap the next tick's.
+    if (!refreshing) {
+      refreshing = true;
+      await refreshWatchers()
+        .catch((e) => log.error("watchers failed", { err: (e as Error).message }))
+        .finally(() => {
+          refreshing = false;
+        });
+    }
   };
   await tick();
   const timer = setInterval(tick, 60_000);

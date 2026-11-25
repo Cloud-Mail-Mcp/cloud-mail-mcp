@@ -240,6 +240,14 @@ test("sender checks and spam score from the receiving server", { skip }, async (
   assert.equal(message.checks.dmarc, "fail");
   assert.equal(message.checks.spamScore, 8.4);
   assert.equal(message.checks.verdict, "spam");
+  // The connection log has the sync.
+  const { events } = await api("GET", `/accounts/${accountId}/events`);
+  assert.ok(
+    events.some(
+      (e: { kind: string; message: string }) => e.kind === "sync" && /Synced/.test(e.message),
+    ),
+    JSON.stringify(events),
+  );
 });
 
 test("Spam moves to Spam and can block the sender; Not spam undoes both", { skip }, async () => {

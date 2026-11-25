@@ -1,5 +1,6 @@
 import "./env-compat";
 
+export * from "./account-events";
 export * from "./accounts";
 export * from "./agents";
 export * from "./ai-usage";
