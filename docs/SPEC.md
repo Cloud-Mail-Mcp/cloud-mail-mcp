@@ -5,7 +5,7 @@ Status: **v0.1 implemented** · Spec date: 2026-11-17 · Updated: 2026-11-20
 > **v0.1 status (2026-11-20).**
 > - **Built and tested:** IMAP/SMTP module, newest-first resumable sync with IDLE push, a cross-process sync lease and a daily reconcile, order-independent threading, batched encrypted body storage (fs/S3), Postgres search, the mail service (read, search, thread, attachments, mark, move, trash or permanently delete, send, reply, forward, drafts, folders), agents with API keys, per-account grants (scopes, folder allow/deny, send policy, recipient allow-list, rate limit), the approval queue, the audit log, the MCP endpoint (Streamable HTTP, stateless, tools filtered by grant), the admin panel (accounts, mail viewer, agents, permissions, approvals, audit, settings), and the Docker image.
 > - **Tests:** unit tests, sync integration tests, and MCP end-to-end tests using the real MCP SDK client against GreenMail.
-> - **Not in v0.1 yet:** the local LRU disk cache in front of S3 (§8a); OpenSearch; MCP OAuth 2.1 (API keys only); the Microsoft and Gmail API modules; anything commercial.
+> - **Not in v0.1 yet:** the local LRU disk cache in front of S3 (§8a); OpenSearch; the Microsoft and Gmail API modules; anything commercial.
 
 > **Current priority: personal use.** The first user is the author: about 20 accounts across cPanel IMAP, Gmail/Workspace, Microsoft 365/Outlook and Apple iCloud, with the largest mailbox under 100k messages (roughly 1–2M messages total). Other tools failed on **volume**. Commercial pieces (licensing, billing, `ee/`, paid modules) are **deferred**. The module architecture stays so that selling modules (one-time purchase) remains an option, but every module may simply ship free.
 

@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { api, type Me } from "../lib/api";
+import { Logo } from "./ui";
 
 const nav: Array<{ href: string; label: string; soon?: boolean }> = [
   { href: "/mail", label: "Mail" },
@@ -29,9 +30,7 @@ export function Shell({ me, children }: { me: Me; children: ReactNode }) {
     <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center gap-2 px-5 py-4">
-          <div className="flex size-7 items-center justify-center rounded-md bg-blue-600 text-sm font-bold text-white">
-            M
-          </div>
+          <Logo size={28} />
           <span className="font-semibold text-zinc-900 dark:text-zinc-50">Cloud Mail MCP</span>
         </div>
         <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Main">

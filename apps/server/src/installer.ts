@@ -214,7 +214,7 @@ const PAGE = `<!doctype html>
 @media (prefers-color-scheme:dark){:root{--bg:#09090b;--card:#18181b;--text:#f4f4f5;--muted:#a1a1aa;--border:#3f3f46;--err-bg:#450a0a;--err:#fecaca;--ok-bg:#052e16;--ok:#bbf7d0}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:560px;margin:0 auto;padding:40px 16px}.logo{display:flex;gap:12px;align-items:center;margin-bottom:24px}
-.mark{width:36px;height:36px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:18px}
+.mark{width:36px;height:36px;flex:none}
 h1{font-size:20px;margin:0}p.sub{margin:2px 0 0;color:var(--muted);font-size:14px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-top:16px}
 label{display:block;font-weight:500;font-size:14px;margin:14px 0 6px}label:first-child{margin-top:0}
@@ -228,7 +228,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}bu
 .toggle{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:13.5px}
 code{font-family:ui-monospace,Menlo,monospace;font-size:13px}
 </style></head><body><main>
-<div class="logo"><div class="mark" aria-hidden="true">M</div><div><h1>Connect a database</h1><p class="sub">Step 1 of setup. Cloud Mail MCP stores its index and settings in PostgreSQL.</p></div></div>
+<div class="logo"><!-- Same mark as apps/admin/src/assets/logo.svg --><svg class="mark" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2563EB"/><path d="M8.5 22.5V10l7.5 6.75L23.5 10v12.5z" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="16.75" r="1.9" fill="#FFFFFF"/></svg><div><h1>Connect a database</h1><p class="sub">Step 1 of setup. Cloud Mail MCP stores its index and settings in PostgreSQL.</p></div></div>
 <form class="card" id="f" novalidate>
 <label for="code">Setup code</label>
 <input id="code" name="code" autocomplete="off" required placeholder="XXXX-XXXX" autocapitalize="characters">

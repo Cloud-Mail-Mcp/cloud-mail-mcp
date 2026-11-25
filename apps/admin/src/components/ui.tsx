@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import logoUrl from "../assets/logo.svg";
 import type { AccountStatus } from "../lib/api";
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(" ");
@@ -259,5 +260,21 @@ export function RadioGroup({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+/**
+ * The Cloud Mail MCP mark. The artwork lives in assets/logo.svg (also the browser tab icon):
+ * replace that one file to change the logo everywhere in the admin panel.
+ */
+export function Logo({ size = 28, className }: { size?: number; className?: string }) {
+  return (
+    <img
+      src={logoUrl}
+      width={size}
+      height={size}
+      alt="Cloud Mail MCP"
+      className={cx("shrink-0", className)}
+    />
   );
 }

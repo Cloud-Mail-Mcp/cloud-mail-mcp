@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Alert, Button, Card } from "../components/ui";
+import { Alert, Button, Card, Logo } from "../components/ui";
 import { type AccountDetail, api } from "../lib/api";
 import { AddAccountForm } from "./Accounts";
 import { OwnerForm } from "./Auth";
@@ -92,9 +92,7 @@ export function SetupWizard({ hasUsers }: { hasUsers: boolean }) {
     <div className="min-h-screen bg-zinc-50 px-4 py-10 dark:bg-zinc-950">
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">
-            M
-          </div>
+          <Logo size={36} />
           <div>
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
               Set up Cloud Mail MCP

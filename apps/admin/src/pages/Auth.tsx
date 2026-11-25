@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, type ReactNode, useState } from "react";
-import { Alert, Button, Field, Input } from "../components/ui";
+import { Alert, Button, Field, Input, Logo } from "../components/ui";
 import { type ApiError, api } from "../lib/api";
 
 function AuthFrame({
@@ -16,9 +16,7 @@ function AuthFrame({
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">
-            M
-          </div>
+          <Logo size={40} className="mx-auto mb-3" />
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{title}</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{subtitle}</p>
         </div>
