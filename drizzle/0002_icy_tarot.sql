@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "messages_id_uq" ON "messages" USING btree ("id");

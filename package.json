@@ -1,0 +1,15 @@
+{
+  "name": "cloud-mail-mcp",
+  "version": "edge-c5f1b7e",
+  "private": true,
+  "description": "Cloud Mail MCP — self-hosted email server for AI agents (prebuilt Node.js bundle).",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs --host 0.0.0.0 --port ${PORT:-3000}"
+  },
+  "engines": {
+    "node": ">=22.15"
+  }
+}
