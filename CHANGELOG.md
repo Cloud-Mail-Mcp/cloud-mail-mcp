@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-26
+
 **Highlights**
 
 - **MailMCP is now Cloud Mail MCP.** New name everywhere: the app, docs, Docker image
@@ -243,5 +245,6 @@ First release.
 - Install with Docker Compose (optional automatic HTTPS) or from source. In-app update checks and
   one-click updates for Docker installs; forks publish and update from their own repository.
 
-[Unreleased]: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Cloud-Mail-Mcp/cloud-mail-mcp/releases/tag/v0.1.0

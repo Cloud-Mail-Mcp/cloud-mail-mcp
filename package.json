@@ -1,7 +1,7 @@
 {
   "name": "cloud-mail-mcp",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Self-hosted email server for AI agents: many mailboxes, local index, MCP access with per-account permissions.",
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.34.9",
