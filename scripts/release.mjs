@@ -27,12 +27,15 @@ const skipCi = args.includes("--skip-ci-check");
 const version = args.find((a) => !a.startsWith("--"))?.replace(/^v/, "");
 
 const sh = (cmd, cmdArgs, opts = {}) =>
-  execFileSync(cmd, cmdArgs, {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    ...opts,
-  }).trim();
+  // With stdio "inherit" the output goes to the terminal and execFileSync returns null.
+  (
+    execFileSync(cmd, cmdArgs, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      ...opts,
+    }) ?? ""
+  ).trim();
 const step = (msg) => console.log(`\n▶ ${msg}`);
 const fail = (msg) => {
   console.error(`\n✖ ${msg}`);
